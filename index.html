@@ -1,0 +1,2099 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KURFC マルチアングル</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: broadcast multiview monitor — camera windows on a free stage (presets: big+small / equal / free), shared transport below, analyst panel (tabs) at right */
+:root{
+  color-scheme:dark;
+  --bg:#121012; --panel:#1a1719; --raise:#252125; --raise2:#2f2a2e; --line:#363035; --fg:#ece6e7; --muted:#a2969a;
+  --enji:#6f3036; --enji-hi:#c25563; --tally:#e04452;
+  --cond:'Barlow Condensed','Noto Sans JP',system-ui,sans-serif;
+  --body:'Noto Sans JP',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:13px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--enji-hi);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 310px;grid-template-rows:auto minmax(0,1fr) auto;gap:10px 14px;padding-block:10px}
+
+/* header */
+.bar{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.bar .grow{flex:1}
+.brand b{font-family:var(--cond);font-weight:700;letter-spacing:.08em;background:var(--enji);color:#fff;padding:3px 8px 2px;border-radius:2px;font-size:15px}
+.brand span{font-weight:700;font-size:15px;letter-spacing:.04em}
+.title{flex:1 1 220px;min-width:0;max-width:420px;background:transparent;border:1px solid transparent;border-radius:5px;padding:6px 8px;font-size:14px;font-weight:500}
+.title:hover,.title:focus{border-color:var(--line);background:var(--panel)}
+.title::placeholder{color:var(--muted);font-weight:400}
+.btn{background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:7px 12px;line-height:1.2;white-space:nowrap;min-height:34px}
+.btn:hover{border-color:var(--muted);background:var(--raise2)}
+.btn.pri{background:var(--enji);border-color:var(--enji-hi);color:#fff}
+.btn.on{background:var(--enji);border-color:var(--enji-hi);color:#fff}
+.btn.sm{padding:3px 8px;min-height:26px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:default}
+.btn kbd{margin-left:6px}
+
+/* stage */
+.stagewrap{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
+.banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:color-mix(in srgb,var(--enji) 35%,var(--panel));border:1px solid var(--enji-hi);border-radius:5px;padding:8px 12px}
+.banner p,.banner .bt{margin:0;flex:1;min-width:220px;line-height:1.55}
+.banner ol{margin:2px 0 0;padding-left:1.4em}
+.stage{flex:1;min-height:0;position:relative}
+.tile{position:absolute;background:#000;border:1px solid var(--line);border-radius:5px;overflow:hidden;cursor:pointer;touch-action:pan-y}
+.tile.zoomed{touch-action:none;cursor:grab}
+.tile:not(.main):hover{border-color:var(--muted)}
+.tile.main{border-color:var(--tally);box-shadow:0 0 0 1px var(--tally)}
+.tile.dragover{outline:2px dashed var(--enji-hi);outline-offset:-6px}
+.stage.moving .tile{transition:none}
+.media{position:absolute;inset:0;overflow:hidden}
+.zoomer{position:absolute;inset:0;transform-origin:0 0}
+.zoomer video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.ytwrap{position:absolute;inset:0;pointer-events:none;background:#000}
+/* the iframe is taller than the visible box so YouTube's title bar and logo fall outside it */
+.ytview{position:absolute;overflow:hidden}
+.ytview iframe{position:absolute;left:0;top:-64px;width:100%;height:calc(100% + 128px);border:0}
+.tile:not(.is-yt) .ytwrap,.tile.is-yt video{display:none}
+.tile.ad .ytwrap,.tile.tapme .ytwrap{pointer-events:auto}
+.tile.ad .ytview{overflow:visible}
+.tbar{position:absolute;left:6px;right:6px;top:6px;display:flex;align-items:center;gap:6px;z-index:3;pointer-events:none}
+.tbar>*{pointer-events:auto}
+.tbar .grip{display:none;cursor:move;background:#000c;border:1px solid #fff4;border-radius:3px;padding:0 5px;font-size:13px;line-height:18px;user-select:none;touch-action:none}
+.tbar .num{font-family:var(--cond);font-weight:700;font-size:13px;min-width:20px;text-align:center;background:#000c;border:1px solid #fff4;border-radius:2px;padding:1px 5px 0;pointer-events:none}
+.tile.main .tbar .num{background:var(--tally);border-color:var(--tally);color:#fff}
+.tbar .lbl{font-size:12px;background:#000a;padding:2px 6px;border-radius:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;pointer-events:none}
+.tbar .chip2{font-family:var(--cond);font-size:11px;letter-spacing:.08em;color:#fff;background:#000a;border:1px solid #fff3;padding:1px 5px;border-radius:2px;pointer-events:none}
+.tbar .sp{flex:1;pointer-events:none}
+.tbar .zreset{background:#000c;border:1px solid #fff4;border-radius:3px;font-size:11px;padding:1px 6px}
+.ctime{position:absolute;right:6px;bottom:6px;z-index:2;font-family:var(--mono);font-size:11px;background:#000a;padding:1px 5px;border-radius:2px;pointer-events:none;font-variant-numeric:tabular-nums}
+.tile.ad .ctime{background:var(--enji);color:#fff;font-size:12px}
+.adnote{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:999;background:#000d;border:1px solid var(--enji-hi);border-radius:8px;padding:8px 14px;text-align:center;pointer-events:none;max-width:calc(100% - 20px)}
+.adnote b{display:block;font-size:22px;font-family:var(--mono);color:#fff;font-variant-numeric:tabular-nums}
+.adnote span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.app.theater .adnote{top:calc(60px + env(safe-area-inset-top,0px))}
+/* "tap to start" note sits low and small so it never covers the picture's middle */
+.adnote.low{top:auto;bottom:8px;padding:5px 12px}
+.adnote.low b{font-size:14px;font-family:var(--body)}
+.adnote.low span{font-size:11px}
+.app.theater .adnote.low{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto;max-width:calc(100% - 140px)}
+.app.needtap .tcenter{display:none!important}
+.tile.tapme .ctime{display:none}
+.tile.held .ctime::after{content:" ・停止中";color:var(--muted)}
+.tile:not(.loaded) .ctime,.tile:not(.loaded) .tbar .chip2{display:none}
+.rz{position:absolute;right:0;bottom:0;width:22px;height:22px;z-index:4;cursor:nwse-resize;display:none;touch-action:none;
+  background:linear-gradient(135deg,transparent 50%,#fff8 50%,#fff8 58%,transparent 58%,transparent 68%,#fff8 68%,#fff8 76%,transparent 76%)}
+.tile.main.focusmain .rz{cursor:ew-resize}
+@media (hover:hover) and (pointer:fine) and (min-width:901px){
+  .tile:hover .tbar .grip,.tile:hover .rz{display:block}
+}
+.bigplay{position:absolute;inset:0;display:grid;place-items:center;z-index:1;pointer-events:none;opacity:0;transition:opacity .25s}
+.bigplay span{width:64px;height:64px;border-radius:50%;background:#000a;display:grid;place-items:center}
+.bigplay svg{width:26px;height:26px;fill:#fff}
+.bigplay.flash{opacity:1;transition:none}
+.oor,.err{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:12px;background:#000c;z-index:1;color:var(--muted);font-size:12px;line-height:1.6}
+.tile:not(.is-oor) .oor{display:none}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px;text-align:center;background:var(--panel);z-index:2}
+.tile.loaded .empty{display:none}
+.empty strong{font-size:14px}
+.empty .want{color:#f0c36b;font-size:12px;max-width:320px;overflow-wrap:anywhere}
+.ytform{display:flex;gap:4px;width:min(100%,360px)}
+.ytform input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:6px 8px;font-size:12px}
+.ytnote{color:var(--muted);font-size:11px;line-height:1.5;max-width:320px}
+.nudge{position:absolute;left:0;right:0;bottom:0;z-index:4;background:#000d;padding:6px;display:flex;flex-direction:column;gap:5px}
+.stage:not(.syncing) .nudge,.tile:not(.loaded) .nudge{display:none}
+.nudge input[type=range]{width:100%;accent-color:var(--enji-hi)}
+.nbtns{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.nbtns button{background:var(--raise);border:1px solid var(--line);border-radius:3px;padding:3px 7px;font-size:11px;font-family:var(--mono)}
+.stage.syncing .ctime{bottom:auto;top:30px}
+.stage.syncing .rz,.stage.syncing .grip{display:none!important}
+.stage.syncing .tile:not(.main) .nudge{display:none}
+.tile.synchide{display:none}
+.tile.tiny .tbar .lbl,.tile.tiny .tbar .chip2,.tile.tiny .ctime{display:none}
+/* one big picture: the others wait underneath, so switching is instant */
+.tile.offstage{visibility:hidden;pointer-events:none}
+.camchips{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:6px}
+.camchips button{min-width:0;display:flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--line);border-radius:18px;padding:6px 10px 6px 6px;min-height:36px;font-size:13px;white-space:nowrap}
+.camchips button span,.tctl .cams button span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.camchips button b{flex:none;font-family:var(--cond);font-size:13px;min-width:22px;height:22px;line-height:22px;border-radius:11px;background:var(--raise2);text-align:center}
+.camchips button.on{background:var(--enji);border-color:var(--enji-hi);color:#fff}
+.camchips button.on b{background:var(--tally)}
+@media (max-width:900px){ .camchips button{min-height:44px;font-size:14px} }
+.tile .refbadge{display:none;position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:3;background:var(--enji);color:#fff;font-size:12px;padding:2px 10px;border-radius:10px;pointer-events:none}
+.tile.syncref .refbadge{display:block}
+.banner .sub{color:var(--muted);font-size:12px}
+.banner .sbtns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* first screen */
+.start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;border:1px dashed var(--line);border-radius:6px;
+  background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),#ffffff08 calc(10% - 1px) 10%),var(--panel)}
+.start.dragover{border-color:var(--enji-hi)}
+.start .steps{text-align:left;margin:0;padding:12px 18px 12px 36px;background:#0006;border:1px solid var(--line);border-radius:6px;line-height:1.9;max-width:460px}
+.start .steps li::marker{font-family:var(--cond);font-weight:700;color:var(--enji-hi)}
+.start .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;width:min(100%,520px)}
+.start .ytform{width:min(100%,460px)}
+.start .hint{color:var(--muted);font-size:12px}
+
+/* transport */
+.transport{grid-column:1;grid-row:3;display:flex;flex-direction:column;gap:8px;min-width:0}
+.track{position:relative;height:46px;background:var(--panel);border:1px solid var(--line);border-radius:5px;cursor:pointer;touch-action:none;user-select:none}
+.track.disabled{opacity:.4;pointer-events:none}
+.track .rail{position:absolute;left:8px;right:8px;top:9px;height:8px;background:var(--raise);border-radius:4px}
+.track .fill{position:absolute;left:0;top:0;bottom:0;background:var(--enji);border-radius:4px}
+.lanes{position:absolute;left:8px;right:8px;top:21px;display:flex;flex-direction:column;gap:1px}
+.lane{position:relative;height:3px}
+.lane i{position:absolute;top:0;bottom:0;background:var(--muted);opacity:.55;border-radius:2px}
+.lane.main i{background:var(--tally);opacity:.9}
+.marks{position:absolute;left:8px;right:8px;top:2px;height:22px;pointer-events:none}
+.marks i{position:absolute;top:0;width:3px;height:22px;margin-left:-1px;border-radius:1px}
+.marks i.us{height:11px}
+.marks i.op{top:11px;height:11px}
+.head{position:absolute;top:2px;bottom:2px;width:2px;margin-left:-1px;background:#fff;pointer-events:none;border-radius:1px}
+.track .inner{position:absolute;left:8px;right:8px;top:0;bottom:0}
+.tip{position:absolute;bottom:calc(100% + 6px);transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:11px;pointer-events:none;white-space:nowrap;z-index:5}
+.ctrls{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.ctrls .btn{padding:7px 9px}
+.play{width:48px;height:38px;display:grid;place-items:center;background:var(--enji);border:1px solid var(--enji-hi);border-radius:5px;color:#fff}
+.play svg{width:18px;height:18px;fill:currentColor}
+.tc{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;padding:0 4px;white-space:nowrap}
+.tc small{color:var(--muted);font-size:12px}
+.ctrls .sp{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{background:var(--raise);border:0;border-left:1px solid var(--line);padding:0 8px;min-height:34px;font-size:12px;white-space:nowrap}
+.seg.mono button{font-family:var(--mono)}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--enji);color:#fff}
+
+/* panel */
+.panel{grid-column:2;grid-row:2 / span 2;background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;min-height:0;display:flex;flex-direction:column}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex:none}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:10px 6px 8px;font-weight:500;color:var(--muted)}
+.tabs button.on{color:var(--fg);border-bottom-color:var(--enji-hi)}
+.tabs .cnt{font-family:var(--mono);font-size:11px;background:var(--raise2);border-radius:8px;padding:0 6px;margin-left:4px}
+.pane{overflow:auto;flex:1;min-height:0;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pane h3{margin:4px 0 0;font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:.14em;color:var(--muted)}
+.arow{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 8px;padding:8px 0;border-top:1px solid #ffffff0d}
+.arow:first-child{border-top:0}
+.arow .num{font-family:var(--cond);font-weight:700;text-align:center;border:1px solid var(--line);border-radius:2px;height:20px;line-height:19px;background:none;padding:0;color:var(--fg)}
+.arow.main .num{background:var(--tally);border-color:var(--tally);color:#fff}
+.arow input.alabel{background:transparent;border:1px solid transparent;border-radius:3px;padding:1px 4px;min-width:0;width:100%;font-weight:500}
+.arow input.alabel:hover,.arow input.alabel:focus{border-color:var(--line);background:var(--bg)}
+.arow .meta{grid-column:2;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow .offs{grid-column:2;display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+.arow .offs button,.arow .acts button{background:var(--raise);border:1px solid var(--line);border-radius:3px;padding:2px 5px;font-size:11px}
+.arow .offs input{width:58px;background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:1px 4px;font-family:var(--mono);font-size:11px;text-align:right}
+.arow .offs .k{color:var(--muted);font-size:11px;margin-right:2px}
+.arow .acts{grid-column:2;display:flex;gap:4px;flex-wrap:wrap}
+.addrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid #ffffff0d;color:var(--muted);font-size:12px}
+.tags{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.tags button{background:var(--raise);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:4px;padding:8px 9px;font-size:13px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:4px;white-space:nowrap}
+.tags button:hover{background:var(--raise2)}
+.tags button kbd{font-size:10px;line-height:1.4}
+.filters{display:flex;gap:4px;flex-wrap:wrap}
+.filters button{background:none;border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--muted)}
+.filters button.on{border-color:var(--c,var(--enji-hi));color:var(--fg);background:var(--raise)}
+.reelrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.reelrow select{background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:2px 4px}
+.mlist{display:flex;flex-direction:column;gap:1px}
+.mrow{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:6px;align-items:center;padding:3px 4px;border-radius:4px}
+.mrow.cur{background:color-mix(in srgb,var(--enji) 30%,transparent)}
+.mrow .mt{font-family:var(--mono);font-size:12px;background:none;border:0;padding:3px 4px;border-radius:3px;color:var(--fg);font-variant-numeric:tabular-nums;text-align:left}
+.mrow .mt:hover{background:var(--raise2)}
+.mrow .chip{font-size:11px;padding:1px 6px;border-radius:2px;border:1px solid var(--c);white-space:nowrap}
+.mrow .cam{font-family:var(--cond);color:var(--muted);font-size:11px;margin-left:4px}
+.mrow input{background:transparent;border:1px solid transparent;border-radius:3px;padding:2px 4px;min-width:0;font-size:12px}
+.mrow input:hover,.mrow input:focus{border-color:var(--line);background:var(--bg)}
+.mrow .x{background:none;border:0;color:var(--muted);padding:0 4px;font-size:15px}
+.mrow .sh{background:none;border:1px solid var(--line);border-radius:3px;color:var(--muted);padding:0 5px;font-size:11px}
+.mrow .by{display:block;color:var(--muted);font-size:10px;margin-top:1px}
+.mrow .mt small{display:block;color:var(--muted);font-size:10px;font-family:var(--body)}
+.mempty{color:var(--muted);font-size:12px;line-height:1.7;margin:0}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin:0}
+.keys dt{white-space:nowrap}
+.keys dd{margin:0;color:var(--muted)}
+.howto{margin:0;padding-left:1.4em;line-height:1.75}
+.howto li{margin-bottom:4px}
+.howto li::marker{font-family:var(--cond);font-weight:700;color:var(--enji-hi)}
+kbd{font-family:var(--mono);font-size:11px;background:var(--raise);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:9px 16px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1}
+textarea.copybox{width:100%;height:80px;background:var(--bg);border:1px solid var(--line);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--fg)}
+
+/* popover */
+.scrim{position:fixed;inset:0;background:#000a;z-index:30;display:grid;place-items:center;padding:16px}
+.pop{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;width:min(520px,100%);display:flex;flex-direction:column;gap:10px;max-height:calc(100dvh - 32px);overflow:auto}
+.pop h2{margin:0;font-size:16px}
+.pop p{margin:0;color:var(--muted);line-height:1.6}
+.pop textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:8px;font-family:var(--mono);font-size:12px}
+.pop .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* share dialog & tag sheet */
+.pop label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.pop label input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:8px;font-size:14px;color:var(--fg)}
+.pop label.chk{flex-direction:row;align-items:center;gap:8px;color:var(--fg);font-size:13px}
+.pop .shtext{min-height:110px;font-family:var(--body);font-size:12px}
+.tags.big{grid-template-columns:repeat(2,1fr);gap:8px}
+.tags .th{font-size:12px;font-weight:700;text-align:center;padding:2px 0;border-radius:4px;color:#fff}
+.tags .th.us{background:var(--enji)}
+.tags .th.op{background:#3c5a7a}
+.tags .wide{grid-column:1 / -1}
+.side{display:inline-block;font-size:10px;line-height:15px;padding:0 5px;border-radius:8px;margin-left:4px;color:#fff;vertical-align:1px}
+.side.us{background:var(--enji)}
+.side.op{background:#3c5a7a}
+.filters .sep{width:100%;height:0}
+body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
+body.readonly .mrow input{pointer-events:none}
+.tags.big button{padding:14px 12px;font-size:16px}
+@media (max-height:700px){ .tags.big button{padding:9px 10px;font-size:15px} }
+.sheetscrim{align-items:end}
+.sheet{border-bottom-left-radius:0;border-bottom-right-radius:0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+.sheet input{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:10px;font-size:15px}
+
+/* phone bottom bar */
+/* big view: the picture fills the screen, a few controls float on it and hide while playing */
+.tctl,.tclose{display:none}
+.app.theater .stagewrap{position:fixed;inset:0;z-index:25;background:#000;gap:0;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.app.theater .stage{flex:1;height:auto!important;min-height:0}
+.app.theater .tile{border:0;border-radius:0;box-shadow:none}
+.app.theater #camchips,.app.theater .banner,.app.theater .rz,.app.theater .grip{display:none!important}
+body.theater-on{overflow:hidden}
+body.theater-on .mbar{display:none!important}
+.app.theater .tctl{display:flex;position:absolute;left:0;right:0;bottom:0;z-index:30;flex-direction:column;gap:6px;
+  padding:28px max(14px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));
+  background:linear-gradient(transparent,#000d 45%);transition:opacity .25s}
+.app.theater .tclose{display:block;position:absolute;z-index:30;top:calc(8px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));transition:opacity .25s}
+.app.theater.idle .tctl,.app.theater.idle .tclose,.app.theater.idle .tcenter{opacity:0;pointer-events:none}
+.app.theater.idle .tcenter button,.app.theater.idle .tctl *{pointer-events:none}
+.tcenter,.tflash{display:none}
+.app.theater .tcenter{display:flex;position:absolute;inset:0;z-index:29;align-items:center;justify-content:center;gap:clamp(28px,9vw,80px);pointer-events:none;background:#0004;transition:opacity .25s}
+.app.theater.idle .tcenter{background:transparent}
+.tcenter button{pointer-events:auto;display:grid;place-items:center;border-radius:50%;border:0;color:#fff;background:#0008}
+.tcenter .tbig{width:76px;height:76px}
+.tcenter .tbig svg{width:30px;height:30px;fill:#fff}
+.tcenter .tskip{position:relative;width:56px;height:56px}
+.tcenter .tskip svg{width:30px;height:30px;fill:#fff}
+.tcenter .tskip span{position:absolute;font-size:10px;font-weight:700;top:50%;left:50%;transform:translate(-50%,-30%)}
+.app.theater .tflash{display:block;position:absolute;top:50%;left:12%;transform:translateY(-50%);z-index:31;background:#000a;color:#fff;border-radius:24px;padding:10px 18px;font-size:16px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .3s}
+.app.theater .tflash.r{left:auto;right:12%}
+.app.theater .tflash.show{opacity:1;transition:none}
+.app.theater.idle .tbar{opacity:.35}
+.tctl .prog{position:relative;height:24px;touch-action:none;cursor:pointer}
+.tctl .prog i{position:absolute;left:0;right:0;top:10px;height:4px;border-radius:2px;background:#fff4}
+.tctl .prog b{position:absolute;left:0;top:10px;height:4px;border-radius:2px;background:var(--tally)}
+.tctl .prog u{position:absolute;top:5px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#fff}
+.tctl .prog s{position:absolute;top:6px;width:3px;height:12px;margin-left:-1px;border-radius:1px;text-decoration:none}
+.tctl .prog s.us{top:2px;height:8px}
+.tctl .prog s.op{top:14px;height:8px}
+.tctl .row{display:flex;gap:8px;align-items:center}
+.tctl button,.tclose{min-height:44px;min-width:44px;background:#000a;border:1px solid #fff4;border-radius:22px;color:#fff;padding:0 14px;font-size:14px;white-space:nowrap}
+.tctl .tplay{width:52px;padding:0;display:grid;place-items:center}
+.tctl .tplay svg{width:18px;height:18px;fill:#fff}
+.tctl .cams{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:6px}
+.tctl .cams:empty{display:none}
+.tctl .cams button{min-width:0;display:flex;align-items:center;gap:6px;padding:0 10px 0 6px}
+.tctl .row .grow{flex:1}
+.tctl .cams button b{font-family:var(--cond);min-width:26px;height:26px;line-height:26px;border-radius:13px;background:#fff2;text-align:center}
+.tctl .cams button.on{background:var(--enji);border-color:var(--enji-hi)}
+.tctl .cams button.on b{background:var(--tally)}
+.tctl .tt{font-family:var(--mono);color:#fff;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tctl .ttag{background:var(--enji);border-color:var(--enji-hi)}
+@media (max-width:420px){ .tctl .cams button{justify-content:center;padding:0 4px} }
+.mbar{display:none}
+@media (max-width:900px){
+  .mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;gap:6px;align-items:center;background:var(--panel);border-top:1px solid var(--line);
+    padding:8px max(12px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+  .mbar .btn{flex:1;min-height:44px;padding:6px 4px;font-size:13px}
+  .mbar .play{flex:none;width:56px;height:44px}
+  body.has-mbar{padding-bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+  body.has-mbar .toast{bottom:calc(80px + env(safe-area-inset-bottom,0px))}
+  .ctrls .btn,.seg button{min-height:40px}
+  .track{height:52px}
+  .nbtns button{padding:7px 9px;font-size:12px}
+}
+@media (max-width:900px) and (orientation:landscape) and (max-height:520px){
+  .bar,.panel,.ctrls{display:none}
+  .app{gap:6px;padding-block:4px}
+  .track{height:40px}
+  .mbar .btn{min-height:38px}
+  .camchips button{min-height:36px;padding-block:3px}
+  body.has-mbar{padding-bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+}
+@media (pointer:coarse){ .arow .offs button,.arow .acts button{padding:6px 8px;font-size:12px} .mrow .mt{padding:6px} }
+@media (max-width:900px){
+  .stagewrap{order:1} .transport{order:2} .bar{order:3} .panel{order:4}
+  .bar{padding-top:6px;border-top:1px solid var(--line)}
+  html,body{height:auto}
+  .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
+  .stagewrap,.transport,.panel{grid-column:1;grid-row:auto}
+  .stage{flex:none}
+  .stage.fresh{height:auto!important;min-height:420px}
+  .panel{overflow:visible}
+  .pane{overflow:visible}
+  #layoutSeg button[data-l="custom"]{display:none}
+}
+@media (prefers-reduced-motion:reduce){.toast,.bigplay{transition:none}}
+</style>
+</head><body>
+
+<div class="app" id="app">
+  <header class="bar">
+    <div class="brand"><b>KURFC</b><span>マルチアングル</span></div>
+    <input class="title" id="matchTitle" placeholder="試合名（例：vs九州共立大学 10/17）" aria-label="試合名">
+    <span class="grow"></span>
+    <button class="btn" id="resumeBtn" hidden>前回の続き</button>
+    <button class="btn" id="bulk">動画ファイルを追加</button>
+    <button class="btn" id="ytAdd">YouTubeを追加</button>
+    <button class="btn" id="syncBtn">同期を合わせる</button>
+    <button class="btn" id="shareBtn">共有リンク</button>
+    <input type="file" id="bulkInput" accept="video/*" multiple hidden>
+  </header>
+
+  <div class="stagewrap">
+    <div class="banner" id="inappbar" hidden>
+      <p><strong>アプリの中のブラウザで開いています。</strong>動画がうまく再生されないことがあります。右上（または右下）のメニューから「ブラウザで開く」「Chromeで開く」「Safariで開く」を選んでください。</p>
+      <button class="btn" id="inappClose">このまま使う</button>
+    </div>
+    <div class="banner" id="robar" hidden><p><strong>閲覧用のリンクです。</strong>タグの追加・メモの書き換え・削除はできません（見る・場面に飛ぶ・連続再生はできます）。</p></div>
+    <div class="banner" id="tapbar" hidden><p><strong>▶ 下の映像をタップすると再生が始まります。</strong>スマホでは最初の1回だけ必要です（映像のどこを押しても大丈夫です）。</p></div>
+    <div class="banner" id="syncbar" hidden></div>
+    <div class="banner" id="reelbar" hidden>
+      <p id="reelText"></p>
+      <button class="btn" id="reelPrev">前へ <kbd>P</kbd></button>
+      <button class="btn" id="reelNext">次へ <kbd>N</kbd></button>
+      <button class="btn" id="reelStop">終了</button>
+    </div>
+    <main class="stage fresh" id="stage">
+      <div class="adnote" id="adnote" hidden><b id="adLeft"></b><span id="adSub"></span></div>
+      <div class="start" id="start">
+        <ol class="steps">
+          <li><b>動画を入れる</b>：ファイルをここにドロップ、またはYouTubeのURLを貼り付け（何本でも、最大6本）</li>
+          <li><b>同期を合わせる</b>：各カメラを同じ瞬間（キックオフの笛など）にそろえる</li>
+          <li><b>再生してタグ</b>：<kbd>Shift</kbd>+数字で場面に印を付けて、あとで見返す</li>
+        </ol>
+        <div class="row"><button class="btn pri" id="startFile">動画ファイルを選ぶ</button></div>
+        <form class="ytform" id="startYt"><input type="text" id="startYtUrl" placeholder="YouTubeのURL（複数ならスペースか改行で区切る）" aria-label="YouTubeのURL"><button class="btn" type="submit">読み込む</button></form>
+        <span class="hint" id="startHint">動画ファイルはこの枠にドロップできます</span>
+      </div>
+    </main>
+    <div class="camchips" id="camchips" hidden></div>
+    <button class="tclose" id="tClose">× 戻る</button>
+    <div class="tctl" id="tctl">
+      <div class="prog" id="tProg"><i></i><span id="tMarks"></span><b id="tFill"></b><u id="tHead"></u></div>
+      <div class="cams" id="tCams"></div>
+      <div class="row">
+        <span class="tt" id="tTime">0:00</span>
+        <span class="grow"></span>
+        <button class="ttag" id="tTag">＋タグ</button>
+      </div>
+    </div>
+    <div class="tcenter" id="tcenter">
+      <button class="tskip" id="tBack" aria-label="10秒戻す"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg><span>10</span></button>
+      <button class="tbig" id="tPlay" aria-label="再生"><svg viewBox="0 0 16 16"><path d="M3 1.5v13l11-6.5z"/></svg></button>
+      <button class="tskip" id="tFwd" aria-label="10秒進める"><svg viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg><span>10</span></button>
+    </div>
+    <div class="tflash" id="tFlashL">−10秒</div><div class="tflash r" id="tFlashR">+10秒</div>
+  </div>
+
+  <section class="transport">
+    <div class="track" id="track">
+      <div class="marks" id="marks"></div>
+      <div class="rail"><div class="fill" id="fill"></div></div>
+      <div class="lanes" id="lanes"></div>
+      <div class="inner"><div class="head" id="head"></div><div class="tip" id="tip" hidden></div></div>
+    </div>
+    <div class="ctrls">
+      <button class="play" id="play" aria-label="再生"><svg viewBox="0 0 16 16" id="playIcon"><path d="M3 1.5v13l11-6.5z"/></svg></button>
+      <button class="btn" id="replay" title="5秒前からもう一度（R）">↺ 5秒前</button>
+      <button class="btn" data-seek="-5">−5秒</button>
+      <button class="btn" data-frame="-1" title="1コマ戻す（,）">−コマ</button>
+      <button class="btn" data-frame="1" title="1コマ進める（.）">+コマ</button>
+      <button class="btn" data-seek="5">+5秒</button>
+      <div class="tc" id="tc">0:00.0 <small>/ 0:00</small></div>
+      <div class="sp"></div>
+      <div class="seg mono" id="rateSeg" role="group" aria-label="再生速度"></div>
+      <div class="seg" id="layoutSeg" role="group" aria-label="並べ方">
+        <button data-l="focus" title="1つを大きく、ほかを小さく（G）">大小</button><button data-l="grid" title="全部同じ大きさ（G）">均等</button><button data-l="single" title="1本を大きく。下のボタンで切り替え（G）">1画面</button><button data-l="custom" title="枠をドラッグで動かす・角で大きさを変える">自由</button>
+      </div>
+      <button class="btn" id="light" title="メインだけ再生して通信を軽くする">軽量</button>
+      <button class="btn" id="mute" title="音のオン／オフ（M）">音あり</button>
+      <button class="btn" id="fs" title="映像だけを画面いっぱいに（F）">全画面</button>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="tabs" role="tablist">
+      <button data-tab="tags" role="tab">タグ<span class="cnt" id="tagCnt">0</span></button>
+      <button data-tab="angles" role="tab">アングル<span class="cnt" id="angCnt">0</span></button>
+      <button data-tab="help" role="tab">使い方</button>
+    </div>
+    <div class="pane" data-pane="tags">
+      <div class="tags" id="tags"></div>
+      <div class="filters" id="filters"></div>
+      <div class="reelrow">
+        <button class="btn sm pri" id="reelStart">▶ 連続再生</button>
+        <span>前</span><select id="preSel" aria-label="タグの何秒前から"><option>0</option><option>2</option><option selected>3</option><option>5</option><option>8</option></select>
+        <span>秒〜後</span><select id="postSel" aria-label="タグの何秒後まで"><option>3</option><option selected>5</option><option>8</option><option>12</option><option>20</option></select><span>秒</span>
+      </div>
+      <div class="mlist" id="mlist"></div>
+      <div><button class="btn sm" id="copyMarks">タグ一覧を文字でコピー</button></div>
+    </div>
+    <div class="pane" data-pane="angles">
+      <div id="alist"></div>
+      <div class="addrow" id="addrow">アングルを追加：<button class="btn sm" id="addFile">ファイル</button><button class="btn sm" id="addYt">YouTube</button><span id="addMax"></span></div>
+      <p class="mempty">ずれ補正の数字は、そのアングルが基準より何秒先に進んでいるか。直接入力もできます。番号を押すとメインになります。</p>
+    </div>
+    <div class="pane" data-pane="help">
+      <h3>はじめかた</h3>
+      <ol class="howto">
+        <li>動画を入れる：ファイルを画面にドロップするか、YouTubeのURLをコピーして <kbd>Ctrl</kbd>+<kbd>V</kbd>（1〜6本。あとから足したり外したりできます）</li>
+        <li>「同期を合わせる」：基準のアングルで合わせやすい瞬間（キックオフなど）を決め、ほかのアングルを1本ずつ左右に並べて同じ瞬間に合わせます。あとから1本だけ合わせ直すときは「アングル」タブの「合わせ直す」</li>
+        <li>再生しながら、場面ごとにタグを付ける。タグは「自チーム」「相手」の2列に分かれています（ペナルティは反則をしたチーム）。スマホは下の「＋タグ」</li>
+        <li>タグの一覧から場面に飛ぶか、「連続再生」でタグの場面だけを順に見る</li>
+        <li>「共有リンク」で部員に送る（YouTubeの動画とズレ・タグがそのまま開きます）。ふつうは見るだけのリンクで、受け取った人はタグを変えられません。一緒にタグを付けてもらうときは「受け取った人もタグを付けられるようにする」をオンに。タグの「共有」を押すと、その場面から開くリンクになります</li>
+      </ol>
+      <h3>スマホ</h3>
+      <ol class="howto">
+        <li>最初は「1画面」：1本を大きく映し、映像の下のボタンで見たいアングルに切り替えます。左右にスワイプ、下のバーの「◀ 画角／画角 ▶」でも切り替わります</li>
+        <li>下のバーで再生・5秒戻し・タグ付け</li>
+        <li>横向きにすると、映像が画面いっぱいになります（縦のままでも「全画面」で同じ表示）。操作はYouTubeアプリと同じで、映像をタップすると操作バーが出たり消えたりします（再生は止まりません）。再生・停止は真ん中のボタン、その左右で10秒戻す／進む。画面の左側・右側をダブルタップでも10秒戻る／進む。再生中は3秒で操作バーが消えます。左右スワイプか番号ボタンでアングル切り替え、「× 戻る」で元の画面へ</li>
+        <li>スマホは通信を軽くするため、最初はメインだけ再生します（「軽量：オン」）。全部同時に動かすには「軽量」を押してオフに</li>
+      </ol>
+      <h3>並べ方と大きさ</h3>
+      <ol class="howto">
+        <li>「大小」「均等」「1画面」「自由」で並べ方を切り替え（<kbd>G</kbd>）。「1画面」は1本を大きく映し、下のボタンを押すとすぐ切り替わります（スマホは最初これ）</li>
+        <li>枠にマウスを乗せると、左上に <b>⠿</b>（ドラッグで移動）、右下に角（ドラッグで大きさを変更）が出ます。「大＋小」のときは大きい枠の角で左右の比率を変えられます</li>
+        <li>映像の拡大：<kbd>Ctrl</kbd>+ホイール（ノートPCは2本指でピンチ、スマホもピンチ）。拡大中はドラッグで見る場所を動かせます。「1×」で元に戻ります</li>
+      </ol>
+      <h3>ショートカット</h3>
+      <dl class="keys">
+        <dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>再生／停止（メインの映像をクリックでも）</dd>
+        <dt><kbd>1</kbd>〜<kbd>6</kbd></dt><dd>メインのアングルを切り替え（ほかの映像をクリックでも）</dd>
+        <dt><kbd>R</kbd></dt><dd>5秒前からもう一度</dd>
+        <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>5秒戻す／進める（<kbd>Shift</kbd>で1秒）</dd>
+        <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>10秒戻す／進める</dd>
+        <dt>ホイール</dt><dd>映像の上で回すと1秒ずつ（<kbd>Shift</kbd>で1コマずつ）</dd>
+        <dt><kbd>,</kbd><kbd>.</kbd></dt><dd>1コマ戻す／進める</dd>
+        <dt><kbd>[</kbd><kbd>]</kbd></dt><dd>再生速度を下げる／上げる</dd>
+        <dt><kbd>Shift</kbd>+<kbd>1</kbd>〜<kbd>5</kbd></dt><dd>自チームのタグ（トライ・スクラム・ラインアウト・ペナルティ・キック）</dd>
+        <dt><kbd>Shift</kbd>+<kbd>Q</kbd>〜<kbd>T</kbd></dt><dd>相手のタグ（同じ順番）。<kbd>B</kbd>でメモ</dd>
+        <dt><kbd>N</kbd> <kbd>P</kbd></dt><dd>連続再生で次／前のタグへ</dd>
+        <dt><kbd>G</kbd> <kbd>S</kbd></dt><dd>並べ方の切り替え／同期を合わせる</dd>
+        <dt><kbd>0</kbd></dt><dd>メインの映像の拡大を元に戻す</dd>
+        <dt><kbd>M</kbd> <kbd>F</kbd></dt><dd>音のオン／オフ／全画面（映像だけを画面いっぱいに。ダブルクリックでも）</dd>
+        <dt><kbd>Esc</kbd></dt><dd>連続再生・同期合わせ・入力欄を閉じる</dd>
+      </dl>
+      <h3>YouTubeの広告</h3>
+      <p class="mempty">スマホは最初「音なし」で始まります（スマホのブラウザは、音ありの自動再生を止めてしまうため）。音を出すには「音なし」ボタンを押してください。<br>広告はYouTubeが流すもので、このページからは止められません。流れている間はほかのアングルも止めて待ち、映像の上に「広告 あと◯秒」と出します（スキップが出たら押せます。広告が2本続くこともあります）。<br>広告を出さないには：①YouTube Premium に入っているアカウントで、同じブラウザでYouTubeにログインしておく ②部のチャンネルの動画なら、YouTube Studio から元の動画をダウンロードして「動画ファイル」として使う（広告なし・コマ送りも正確）。</p>
+      <h3>うまく流れないとき</h3>
+      <p class="mempty">字幕はこの画面では出ないようにしています。それでも出るときは、YouTubeの設定の「字幕を常に表示する」をオフにしてください。<br>通信が追いつかないと止まりやすくなります。「軽量」をオンにすると、メインだけを再生し、ほかのアングルは止めた絵で待機します（切り替えると、その場面から再生）。スマホでは最初からオンです。<br>動画が映らない：H.265(HEVC)はH.264のMP4に変換。YouTubeが映らない：「非公開」や埋め込み禁止の動画は使えません。パソコンのファイルを直接開いたときはYouTubeは使えないので、「マルチアングル起動.bat」かWeb版から開いてください。</p>
+    </div>
+  </aside>
+</div>
+<div class="scrim" id="ytPop" hidden>
+  <div class="pop" role="dialog" aria-labelledby="ytPopTitle">
+    <h2 id="ytPopTitle">YouTubeの動画を追加</h2>
+    <p>URLを1行に1つずつ貼り付けてください。アングルとして順番に追加されます（全部で最大6本）。</p>
+    <textarea id="ytText" placeholder="https://youtu.be/...&#10;https://www.youtube.com/watch?v=..."></textarea>
+    <div class="row"><button class="btn" id="ytCancel">やめる</button><button class="btn pri" id="ytOk">追加する</button></div>
+  </div>
+</div>
+<div class="scrim" id="sharePop" hidden>
+  <div class="pop" role="dialog" aria-labelledby="sharePopTitle">
+    <h2 id="sharePopTitle">共有リンクを作る</h2>
+    <label>試合名<input type="text" id="shTitle" placeholder="例：vs九州共立大学 10/17"></label>
+    <label>あなたの名前（付けたタグに表示されます）<input type="text" id="shName" placeholder="例：橋本"></label>
+    <label class="chk"><input type="checkbox" id="shHere"> 今の場面（<span id="shNow"></span>）から開くようにする</label>
+    <label class="chk" id="shEditRow"><input type="checkbox" id="shEdit"> 受け取った人もタグを付けられるようにする（オフなら見るだけ）</label>
+    <p>下の文をLINEなどに貼ると、受け取った人はリンクを開くだけで同じ動画・ズレ・タグで見られます。受け取った人がタグを足して送り返すと、あなたのタグと合わさります。</p>
+    <textarea class="shtext" id="shText" readonly aria-label="送る文"></textarea>
+    <div class="row"><button class="btn" id="shClose">閉じる</button><button class="btn" id="shCopyUrl">リンクだけコピー</button><button class="btn pri" id="shCopyText">この文をコピー</button></div>
+  </div>
+</div>
+<div class="scrim sheetscrim" id="tagSheet" hidden>
+  <div class="pop sheet" role="dialog" aria-labelledby="tagSheetTitle">
+    <h2 id="tagSheetTitle">タグを付ける <span id="tagSheetTime" class="sub"></span></h2>
+    <div class="tags big" id="tagsBig"></div>
+    <input id="sheetNote" placeholder="メモ（あとからでも書けます）" aria-label="メモ">
+    <div class="row"><button class="btn" id="sheetClose">閉じる</button></div>
+  </div>
+</div>
+<nav class="mbar" id="mbar" hidden>
+  <button class="play" id="mPlay" aria-label="再生"><svg viewBox="0 0 16 16"><path d="M3 1.5v13l11-6.5z"/></svg></button>
+  <button class="btn" id="mBack">↺ 5秒</button>
+  <button class="btn" id="mBig">全画面</button>
+  <button class="btn pri" id="mTag">＋タグ</button>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+// LINE's built-in browser blocks video playback: hand the page over to the phone's normal browser
+const UA = navigator.userAgent || '';
+const IN_LINE = /\bLine\//i.test(UA);
+const IN_APP = IN_LINE || /FBAN|FBAV|Instagram|Twitter|MicroMessenger/i.test(UA);
+if (IN_LINE && !/[?&]openExternalBrowser=1/.test(location.search)) {
+  try { const u = new URL(location.href); u.searchParams.set('openExternalBrowser', '1'); location.replace(u.toString()); } catch (e) {}
+}
+// tidy the address bar (the hand-over flag is not needed once we're in a normal browser)
+if (!IN_APP && /[?&]openExternalBrowser=1/.test(location.search)) {
+  try { const u = new URL(location.href); u.searchParams.delete('openExternalBrowser'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {}
+}
+const MAX = 6;
+const LABELS = ['スタンド中央', 'インゴール裏', 'タッチライン', 'ドローン', 'アングル5', 'アングル6'];
+const TAGS = [
+  {k:'try', name:'トライ', c:'#d9a441'}, {k:'scrum', name:'スクラム', c:'#5b8fd6'},
+  {k:'lineout', name:'ラインアウト', c:'#4fae8b'}, {k:'pen', name:'ペナルティ', c:'#e04452'},
+  {k:'kick', name:'キック', c:'#a07ad6'}, {k:'memo', name:'メモ', c:'#a2969a'}
+];
+const tagOf = k => TAGS.find(x => x.k === k) || TAGS[5];
+// which team the play belongs to (a penalty is tagged to the team that gave it away)
+const SIDES = {us: {name: '自チーム', short: '自'}, op: {name: '相手', short: '相手'}};
+const sideBadge = m => SIDES[m.side] ? `<span class="side ${m.side}">${SIDES[m.side].short}</span>` : '';
+const sideText = m => SIDES[m.side] ? `（${SIDES[m.side].name}）` : '';
+const RATES = [0.25, 0.5, 0.75, 1, 1.5, 2];
+const FRAME = 1 / 30;
+const PAGES_URL = 'https://kurfc-rugby.github.io/mav/';
+// short links (#k=ID): the share data is kept in the club's Google spreadsheet through this Apps Script web app
+const SHORT_API = 'https://script.google.com/macros/s/AKfycbyfp8GhO4q6lDGW19aJyqEpO2-Um5w13m4ndkVPssk4Sn-ziK0VnToY_S_bThr-5Qm1/exec';
+const IS_FILE = location.protocol === 'file:';
+const PHONE = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+const $ = s => document.querySelector(s);
+const stage = $('#stage');
+
+/* ---------- small helpers ---------- */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const now = () => performance.now();
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const prefs = Object.assign({pre: 3, post: 5, tab: null, split: 72, layout: null, custom: {}, light: null}, store.get('mav:prefs', {}));
+const savePrefs = () => store.set('mav:prefs', prefs);
+function fmt(t, dec = true) {
+  if (!isFinite(t)) t = 0;
+  const neg = t < 0; t = Math.abs(t);
+  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = Math.floor(t % 60);
+  const ds = Math.floor((t % 1) * 10);
+  const core = h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+  return (neg ? '-' : '') + core + (dec ? '.' + ds : '');
+}
+let toastTimer;
+function toast(msg, ms = 2000) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function parseYouTube(text) {
+  if (!text) return null;
+  text = text.trim();
+  if (/^[\w-]{11}$/.test(text)) return text;
+  let u; try { u = new URL(text); } catch (e) { return null; }
+  const host = u.hostname.replace(/^www\.|^m\.|^music\./, '');
+  if (host === 'youtu.be') return (u.pathname.slice(1).match(/^[\w-]{11}/) || [])[0] || null;
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const v = u.searchParams.get('v'); if (v && /^[\w-]{11}$/.test(v)) return v;
+    const m = u.pathname.match(/^\/(?:shorts|live|embed|v)\/([\w-]{11})/); if (m) return m[1];
+  }
+  return null;
+}
+const allYouTubeIds = text => (String(text || '').match(/\S+/g) || []).map(parseYouTube).filter(Boolean);
+const wide = () => window.matchMedia('(min-width: 901px)').matches;
+const landPhone = () => window.matchMedia('(max-width: 900px) and (orientation: landscape) and (max-height: 520px)').matches;
+const videoFiles = list => [...list].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
+
+/* ---------- state ---------- */
+const S = {
+  title: '', jump: null, readOnly: false, sideFilter: '', theater: false, theaterAuto: false,
+  angles: [], main: 0, layout: prefs.layout || (PHONE ? 'single' : 'focus'), playing: false, t: 0, rate: 1, muted: PHONE, forceMute: false,
+  sync: false, markers: [], syncBackup: null, reel: null, filter: 'all', shared: false,
+  light: prefs.light == null ? PHONE : prefs.light, holdAt: 0, stalls: [], stallHinted: false
+};
+let UID = 0, ZTOP = 1;
+const mainA = () => S.angles[S.main];
+const loaded = () => S.angles.filter(a => a.ready);
+const idx = a => S.angles.indexOf(a);
+const fileKey = a => a.kind === 'yt' ? 'yt:' + a.ytid : a.name + '|' + a.size;
+const setKey = () => loaded().map(fileKey).sort().join('//');
+function range() {
+  const L = loaded();
+  if (!L.length) return [0, 0];
+  return [Math.min(...L.map(a => -a.off)), Math.max(...L.map(a => a.dur - a.off))];
+}
+
+/* ---------- playback sources (local file / YouTube) ---------- */
+class FileSrc {
+  constructor(v) { this.v = v; this.fine = true; this.inAd = false; }
+  get time() { return this.v.currentTime; } set time(x) { this.v.currentTime = x; }
+  get paused() { return this.v.paused; } get seeking() { return this.v.seeking; }
+  get buffering() { return !this.v.paused && (this.v.seeking || this.v.readyState < 3); }
+  play() { const p = this.v.play(); if (p) p.catch(() => {}); }
+  pause() { this.v.pause(); }
+  setRate(r) { if (this.v.playbackRate !== r) this.v.playbackRate = r; }
+  setMuted(m) { this.v.muted = m; }
+  destroy() { this.v.pause(); this.v.removeAttribute('src'); this.v.load(); }
+}
+class YTSrc {
+  constructor(player) {
+    this.p = player; this.fine = false; this.want = false; this.state = -1;
+    this.target = 0; this.lastSeek = -1e9; this.lastFire = -1e9; this.timer = null; this.rate = 1;
+    this.good = 0; this.playAt = -1e9; this.seekStart = 0; this.bufMs = 700; this.corr = 0;
+  }
+  // an ad shows as "unstarted" (-1) while we want playback; during it the player reports the ad's time and ignores seeks
+  get adLike() { return this.want && this.state === -1; }
+  // a real ad: the player is sending progress for something that is not this video (the ad's own length)
+  get inAd() { const ps = this.ps; return this.adLike && !!ps && now() - ps.at < 1500 && !!this.vdur && Math.abs(ps.dur - this.vdur) > 1; }
+  // asked to play but nothing moves and no ad: usually the phone's browser refused to start it (sound on)
+  get blocked() { return this.want && [-1, 2, 5].includes(this.state) && !this.inAd && now() - this.playAt > 2000 && now() - this.lastSeek > 2000; }
+  get buffering() { return this.want && (this.state === 3 || this.state === -1 || this.state === 5); }
+  get time() {
+    if (now() - this.lastSeek < 500) return this.target;
+    if (this.adLike) return this.good;
+    let v = 0; try { v = this.p.getCurrentTime() || 0; } catch (e) {}
+    if (this.state === 1 || this.state === 2) this.good = v;
+    return v;
+  }
+  set time(x) {
+    this.target = x; this.lastSeek = now(); this.seekStart = now();
+    if (this.timer) return;
+    const fire = () => { this.timer = null; this.lastFire = now(); try { this.p.seekTo(this.target, true); } catch (e) {} };
+    if (now() - this.lastFire > 150) fire(); else this.timer = setTimeout(fire, 150);
+  }
+  get paused() { return !this.want; }
+  get seeking() { return this.state === 3 || this.adLike || now() - this.lastSeek < 900; }
+  play() { if (!this.want) this.playAt = now(); this.want = true; try { this.p.playVideo(); } catch (e) {} }
+  pause() { this.want = false; this.corr = 0; try { this.p.pauseVideo(); } catch (e) {} }
+  rates() {
+    let r = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+    try { const a = this.p.getAvailablePlaybackRates(); if (a && a.length) r = a.slice().sort((x, y) => x - y); } catch (e) {}
+    return r;
+  }
+  // step: -1 / +1 picks the neighbouring speed (e.g. 0.75 / 1.25) to drift back into sync without a jump
+  setRate(r, step = 0) {
+    const rs = this.rates();
+    let k = rs.reduce((b, x, i) => Math.abs(x - r) < Math.abs(rs[b] - r) ? i : b, 0);
+    k = clamp(k + step, 0, rs.length - 1);
+    const rr = rs[k];
+    if (rr !== this.rate) { this.rate = rr; try { this.p.setPlaybackRate(rr); } catch (e) {} }
+  }
+  setMuted(m) { try { m ? this.p.mute() : this.p.unMute(); } catch (e) {} }
+  onState(s) {
+    this.state = s;
+    if (s === 1 && this.seekStart) { this.bufMs = this.bufMs * 0.6 + clamp(now() - this.seekStart, 100, 4000) * 0.4; this.seekStart = 0; }
+  }
+  destroy() { clearTimeout(this.timer); try { this.p.destroy(); } catch (e) {} }
+}
+// YouTube tells the page how long the current ad is (progressState) — use it for a countdown
+window.addEventListener('message', e => {
+  if (!/youtube/.test(String(e.origin))) return;
+  let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (err) { return; }
+  const ps = d && typeof d.info === 'object' && d.info && d.info.progressState;
+  if (!ps) return;
+  const a = S.angles.find(x => x.kind === 'yt' && x.src.p && x.src.p.getIframe && (() => { try { return x.src.p.getIframe().contentWindow === e.source; } catch (err) { return false; } })());
+  if (a) a.src.ps = {cur: +ps.current || 0, dur: +ps.duration || 0, at: now()};
+});
+function adLeft(a) {
+  const s = a.src, ps = s.ps;
+  if (!s.inAd || !ps || !ps.dur) return null;
+  if (Math.abs(ps.dur - a.dur) < 1) return null; // that's the video itself, not an ad
+  return Math.max(0, ps.dur - ps.cur - (now() - ps.at) / 1000);
+}
+function hideCaptions(p) {
+  try { p.unloadModule('captions'); } catch (e) {}
+  try { p.unloadModule('cc'); } catch (e) {}
+  try { p.setOption('captions', 'track', {}); } catch (e) {}
+}
+
+let ytPromise = null;
+function ensureYT() {
+  if (IS_FILE) return Promise.reject('file');
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (ytPromise) return ytPromise;
+  ytPromise = new Promise((res, rej) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(); };
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => { ytPromise = null; rej('blocked'); };
+    document.head.appendChild(s);
+    setTimeout(() => { if (!(window.YT && window.YT.Player)) { ytPromise = null; rej('timeout'); } }, 12000);
+  });
+  return ytPromise;
+}
+const YT_ERRORS = {
+  2: 'URLが正しくないようです。動画のURLをもう一度コピーしてください。',
+  5: 'この動画はブラウザで再生できません。',
+  100: '動画が見つかりません。削除されたか「非公開」になっています。',
+  101: 'この動画は投稿者が埋め込みを許可していません。YouTube Studioの「埋め込みを許可」をオンにしてください。',
+  150: 'この動画は投稿者が埋め込みを許可していません。YouTube Studioの「埋め込みを許可」をオンにしてください。',
+  153: 'YouTubeが再生を止めました（エラー153）。「マルチアングル起動.bat」かWeb版から開き直してください。'
+};
+
+/* ---------- persistence ---------- */
+function save() {
+  if (S.readOnly) return;
+  const L = loaded(); if (!L.length) return;
+  const offs = {}, labels = {};
+  L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; });
+  store.set('mav:' + setKey(), {offs, labels, markers: S.markers, title: S.title || ''});
+  saveLast();
+}
+function saveLast() {
+  const slots = S.angles.map(a => a.kind === 'yt' ? {k: 'y', id: a.ytid, label: a.label}
+    : a.kind === 'file' ? {k: 'f', name: a.name, label: a.label} : null).filter(Boolean);
+  if (slots.length) store.set('mav:last', {slots, at: Date.now()});
+}
+function restore() {
+  if (S.readOnly) return false;
+  const d = store.get('mav:' + setKey(), null);
+  if (!d) return false;
+  loaded().forEach(a => {
+    const k = fileKey(a);
+    if (k in d.offs) a.off = d.offs[k];
+    if (d.labels && d.labels[k]) a.label = d.labels[k];
+  });
+  if (Array.isArray(d.markers) && d.markers.length) {
+    if (!S.shared) S.markers = d.markers;
+    else { const have = new Set(S.markers.map(m => m.id)); d.markers.forEach(m => { if (!have.has(m.id)) S.markers.push(m); }); S.markers.sort((x, y) => x.t - y.t); }
+  }
+  if (!S.title && d.title) { S.title = d.title; $('#matchTitle').value = d.title; }
+  return true;
+}
+
+/* ---------- angles (tiles) ---------- */
+const PLAY_SVG = '<path d="M3 1.5v13l11-6.5z"/>', PAUSE_SVG = '<path d="M3 2h3.5v12H3zM9.5 2H13v12H9.5z"/>';
+function newAngle(label) {
+  if (S.angles.length >= MAX) { toast(`アングルは${MAX}本までです`); return null; }
+  const a = {uid: ++UID, label: label || LABELS[S.angles.length] || `アングル${S.angles.length + 1}`,
+    kind: null, url: null, ytid: null, name: '', size: 0, off: 0, dur: 0, ready: false, err: false, want: null,
+    rect: null, zi: ++ZTOP, zoom: {s: 1, x: 0, y: 0}, pending: null};
+  buildTile(a);
+  S.angles.push(a);
+  return a;
+}
+function buildTile(a) {
+  const el = document.createElement('div');
+  el.className = 'tile';
+  el.innerHTML = `
+    <div class="media"><div class="zoomer"><video playsinline preload="auto" muted></video><div class="ytwrap"><div class="ytview"><div id="yt${a.uid}"></div></div></div></div></div>
+    <div class="tbar"><span class="grip" title="ドラッグで移動">⠿</span><span class="num"></span><span class="lbl"></span><span class="chip2 yt" hidden>YouTube</span><span class="chip2 aud" hidden>音声</span><span class="sp"></span><button class="zreset" hidden title="拡大を元に戻す（0）">1×</button></div>
+    <div class="ctime"></div>
+    <div class="refbadge">基準（この瞬間に合わせる）</div>
+    <div class="bigplay"><span><svg viewBox="0 0 16 16"></svg></span></div>
+    <div class="oor">このアングルはこの時間帯の映像がありません</div>
+    <div class="err" hidden></div>
+    <div class="empty">
+      <strong class="elbl"></strong>
+      <span class="want" hidden></span>
+      <button class="btn pick">動画ファイルを選ぶ</button>
+      ${IS_FILE ? '' : `<form class="ytform"><input type="text" placeholder="YouTubeのURL" aria-label="YouTubeのURL"><button class="btn" type="submit">読み込む</button></form>`}
+    </div>
+    <div class="nudge">
+      <input type="range" class="scrub" min="0" max="1" step="0.01" value="0" aria-label="この映像の位置">
+      <div class="nbtns">
+        <button data-d="-1">−1秒</button><button data-d="-0.1">−0.1</button><button data-d="${-FRAME}">−1コマ</button>
+        <button data-d="play">▶/❚❚</button>
+        <button data-d="${FRAME}">+1コマ</button><button data-d="0.1">+0.1</button><button data-d="1">+1秒</button>
+      </div>
+    </div>
+    <div class="rz" title="ドラッグで大きさを変更"></div>
+    <input type="file" accept="video/*" hidden>`;
+  a.el = el; a.v = el.querySelector('video'); a.src = new FileSrc(a.v);
+  a.zoomer = el.querySelector('.zoomer'); a.ytview = el.querySelector('.ytview');
+  const input = el.querySelector('input[type=file]');
+  a.fileInput = input;
+  el.querySelector('.pick').addEventListener('click', e => { e.stopPropagation(); input.click(); });
+  input.addEventListener('change', () => { if (input.files[0]) loadFile(a, input.files[0]); input.value = ''; });
+  const form = el.querySelector('.ytform');
+  if (form) form.addEventListener('submit', e => {
+    e.preventDefault(); e.stopPropagation();
+    const inp = form.querySelector('input'); const ids = allYouTubeIds(inp.value);
+    if (!ids.length) { toast('YouTubeの動画のURLを貼り付けてください'); return; }
+    loadYouTube(a, ids[0]); addYouTubeIds(ids.slice(1)); inp.value = '';
+  });
+  el.querySelector('.zreset').addEventListener('click', e => { e.stopPropagation(); setZoom(a, 1, 0, 0); });
+  el.querySelectorAll('.nbtns button').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    if (b.dataset.d === 'play') { a.src.paused ? a.src.play() : a.src.pause(); }
+    else nudgeTile(a, +b.dataset.d);
+  }));
+  const scrub = el.querySelector('.scrub');
+  scrub.addEventListener('input', () => { a.src.time = +scrub.value; });
+  /* select / play by click; zoom & pan by pinch / ctrl+wheel / drag */
+  el.addEventListener('click', e => {
+    if (a.moved || e.target.closest('button,input,form,.rz,.grip,.nudge')) return;
+    const i = idx(a);
+    if (!a.ready) { if (S.main !== i) setMain(i); return; }
+    if (S.sync) { if (i === S.main) { a.src.paused ? a.src.play() : a.src.pause(); } return; }
+    if (S.theater) { theaterTap(e); return; }
+    if (i === S.main) { togglePlay(); flashPlay(a); } else setMain(i);
+  });
+  el.addEventListener('dblclick', e => { if (!S.theater && idx(a) === S.main && a.ready && !S.sync && !e.target.closest('button,input,.nudge')) toggleFs(); });
+  el.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey) || !a.ready) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = el.getBoundingClientRect();
+    zoomAt(a, Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
+  }, {passive: false});
+  const ptrs = new Map(); let pinch = null, pan = null;
+  el.addEventListener('pointerdown', e => {
+    if (e.target.closest('button,input,form,select,.rz,.grip,.nudge')) return;
+    a.moved = false;
+    a.down = {x: e.clientX, y: e.clientY, type: e.pointerType};
+    ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    if (ptrs.size === 2) {
+      const [p1, p2] = [...ptrs.values()], r = el.getBoundingClientRect();
+      pinch = {d: Math.hypot(p1.x - p2.x, p1.y - p2.y), s: a.zoom.s, cx: (p1.x + p2.x) / 2 - r.left, cy: (p1.y + p2.y) / 2 - r.top};
+      pan = null;
+    } else pan = {x: e.clientX, y: e.clientY, zx: a.zoom.x, zy: a.zoom.y};
+  });
+  el.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (pinch && ptrs.size >= 2) {
+      const [p1, p2] = [...ptrs.values()];
+      const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+      a.moved = true;
+      zoomAt(a, (pinch.s * d / pinch.d) / a.zoom.s, pinch.cx, pinch.cy);
+    } else if (pan && a.zoom.s > 1) {
+      const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) a.moved = true;
+      if (a.moved) setZoom(a, a.zoom.s, pan.zx + dx, pan.zy + dy);
+    }
+  });
+  const up = e => {
+    // swipe left/right on the main picture (touch, not zoomed) switches the angle
+    if (e.type === 'pointerup' && ptrs.size === 1 && a.down && a.down.type !== 'mouse' && a.zoom.s === 1 && !S.sync && idx(a) === S.main) {
+      const dx = e.clientX - a.down.x, dy = e.clientY - a.down.y;
+      if (Math.abs(dx) > 60 && Math.abs(dy) < 50) { a.moved = true; switchAngle(dx < 0 ? 1 : -1); }
+    }
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) pan = null;
+  };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  /* move by the grip, resize by the corner */
+  el.querySelector('.grip').addEventListener('pointerdown', e => startMove(e, a, 'move'));
+  el.querySelector('.rz').addEventListener('pointerdown', e => startMove(e, a, 'size'));
+  /* drop a file on a tile to put it there */
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover');
+    const files = videoFiles(e.dataTransfer.files);
+    if (files.length) { loadFile(a, files[0]); addFiles(files.slice(1)); return; }
+    const ids = allYouTubeIds(e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'));
+    if (ids.length) { loadYouTube(a, ids[0]); addYouTubeIds(ids.slice(1)); }
+  });
+  a.v.addEventListener('loadedmetadata', () => { if (a.kind !== 'file') return; a.dur = a.v.duration; onLoaded(a); });
+  a.v.addEventListener('error', () => {
+    if (!a.v.getAttribute('src') || a.kind !== 'file') return;
+    showError(a, 'このファイルはブラウザで再生できません。<br>H.265(HEVC)の場合はH.264のMP4に変換してください。');
+  });
+  if (window.ResizeObserver) new ResizeObserver(() => { fitYT(a); setZoom(a, a.zoom.s, a.zoom.x, a.zoom.y); }).observe(el);
+  stage.appendChild(el);
+}
+/* keep the YouTube picture exactly inside the tile (16:9 contain) and push YouTube's own bars outside */
+function fitYT(a) {
+  const W = a.el.clientWidth, H = a.el.clientHeight; if (!W || !H) return;
+  const vw = Math.min(W, H * 16 / 9), vh = vw * 9 / 16;
+  Object.assign(a.ytview.style, {left: (W - vw) / 2 + 'px', top: (H - vh) / 2 + 'px', width: vw + 'px', height: vh + 'px'});
+}
+function setZoom(a, s, x, y) {
+  const W = a.el.clientWidth, H = a.el.clientHeight;
+  s = clamp(s, 1, 6);
+  x = clamp(x, W - W * s, 0); y = clamp(y, H - H * s, 0);
+  a.zoom = {s, x, y};
+  a.zoomer.style.transform = s === 1 ? '' : `translate(${x}px,${y}px) scale(${s})`;
+  a.el.querySelector('.zreset').hidden = s === 1;
+  a.el.classList.toggle('zoomed', s > 1);
+}
+function zoomAt(a, factor, mx, my) {
+  const z = a.zoom, s = clamp(z.s * factor, 1, 6), k = s / z.s;
+  setZoom(a, s, mx - (mx - z.x) * k, my - (my - z.y) * k);
+}
+function flashPlay(a) {
+  const b = a.el.querySelector('.bigplay');
+  b.querySelector('svg').innerHTML = S.playing ? PLAY_SVG : PAUSE_SVG;
+  b.classList.add('flash'); requestAnimationFrame(() => requestAnimationFrame(() => b.classList.remove('flash')));
+}
+
+function onLoaded(a) {
+  a.ready = true; a.err = false;
+  const restored = restore();
+  const p = a.pending;
+  if (p && ((p.k === 'y' && a.kind === 'yt' && p.id === a.ytid) || (p.k === 'f' && a.kind === 'file'))) {
+    if (typeof p.off === 'number') a.off = p.off;
+    if (p.label) a.label = p.label;
+  }
+  a.pending = null; a.want = null;
+  a.src.vdur = a.dur;
+  if (!S.mainChosen) S.main = Math.max(0, S.angles.findIndex(x => x.ready));
+  if (!S.angles.some(x => x.pending)) {
+    S.shared = false;
+    if (S.jump) { const j = S.jump; S.jump = null; setTimeout(() => { if (j.cam != null && S.angles[j.cam] && S.angles[j.cam].ready) setMain(j.cam); seekAll(j.t); toast(`${fmt(j.t, false)} の場面から開きました`, 2500); }, 300); }
+  }
+  if (prefs.tab === 'help') setTab('angles');
+  applyAudio(); render(); renderPanel(); renderMarkers();
+  seekAll(S.t); save();
+  toast(restored ? `${a.label}を読み込み、前回の同期とタグを復元しました` : `${a.label}を読み込みました`);
+  if (PHONE && landMQ.matches && !S.theater && !S.sync) enterTheater(true);
+}
+function showError(a, html) {
+  a.err = true; a.ready = false;
+  const box = a.el.querySelector('.err'); box.innerHTML = html; box.hidden = false;
+  render(); renderPanel();
+}
+function clearSource(a) {
+  a.src.pause(); a.src.destroy();
+  if (a.url) URL.revokeObjectURL(a.url);
+  if (a.kind === 'yt') { a.ytview.innerHTML = `<div id="yt${a.uid}"></div>`; a.src = new FileSrc(a.v); }
+  Object.assign(a, {kind:null, url:null, ytid:null, name:'', size:0, dur:0, ready:false, err:false});
+  a.el.classList.remove('is-yt', 'ad');
+  a.el.querySelector('.err').hidden = true;
+}
+function loadFile(a, file) {
+  clearSource(a);
+  if (!loaded().length) { S.t = 0; a.off = 0; }
+  Object.assign(a, {kind:'file', url: URL.createObjectURL(file), name: file.name, size: file.size});
+  a.v.src = a.url; a.v.load();
+  render(); renderPanel();
+}
+function loadYouTube(a, id) {
+  if (IS_FILE) { toast('YouTubeは「マルチアングル起動.bat」かWeb版から開いたときに使えます', 3500); return false; }
+  clearSource(a);
+  if (!loaded().length) { S.t = 0; a.off = 0; }
+  Object.assign(a, {kind:'yt', ytid:id, name:'YouTube', size:0});
+  a.el.classList.add('is-yt');
+  render(); renderPanel();
+  ensureYT().then(() => {
+    if (a.kind !== 'yt' || a.ytid !== id) return;
+    fitYT(a);
+    let src;
+    const player = new YT.Player('yt' + a.uid, {
+      videoId: id, width: '100%', height: '100%',
+      playerVars: {controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, origin: location.origin},
+      events: {
+        onReady: () => {
+          if (a.kind !== 'yt' || a.ytid !== id) return;
+          player.mute(); hideCaptions(player);
+          try { const d = player.getVideoData(); if (d && d.title) a.name = d.title; } catch (e) {}
+          let tries = 0;
+          const waitDur = () => {
+            const d = player.getDuration();
+            if (d > 0) { a.dur = d; onLoaded(a); }
+            else if (++tries < 40) setTimeout(waitDur, 250);
+            else { src.time = 0.01; setTimeout(() => { a.dur = player.getDuration() || 0; if (a.dur > 0) onLoaded(a); else showError(a, 'YouTubeの動画の長さを読み取れませんでした。もう一度読み込んでください。'); }, 1500); }
+          };
+          waitDur();
+        },
+        onApiChange: () => hideCaptions(player),
+        onStateChange: e => {
+          src.onState(e.data);
+          if (e.data === 1) {
+            a.el.classList.remove('tapme');
+            // YouTube may switch captions on (account setting / auto captions) whenever playback starts
+            hideCaptions(player); clearTimeout(src.capT); src.capT = setTimeout(() => hideCaptions(player), 1500);
+            if (!src.want) player.pauseVideo();
+          }
+        },
+        onError: e => showError(a, YT_ERRORS[e.data] || `YouTubeの動画を再生できません（エラー${e.data}）。`)
+      }
+    });
+    src = new YTSrc(player);
+    a.src = src;
+    applyAudio();
+  }).catch(reason => {
+    if (a.kind !== 'yt' || a.ytid !== id) return;
+    showError(a, reason === 'file'
+      ? 'YouTubeは「マルチアングル起動.bat」かWeb版から開いたときに使えます。'
+      : 'YouTubeを読み込めませんでした。インターネットの接続を確認してください。<br>claude.aiの中ではYouTubeは使えないので、「マルチアングル起動.bat」かWeb版を使ってください。');
+  });
+  return true;
+}
+function removeAngle(a) {
+  const k = idx(a); if (k < 0) return;
+  if (S.sync) cancelSync();
+  clearSource(a); a.el.remove();
+  S.angles.splice(k, 1);
+  S.markers.forEach(m => { if (m.cam === k) m.cam = null; else if (m.cam > k) m.cam--; });
+  if (S.main === k) S.main = Math.max(0, S.angles.findIndex(x => x.ready));
+  else if (S.main > k) S.main--;
+  S.main = clamp(S.main, 0, Math.max(0, S.angles.length - 1));
+  applyAudio(); render(); renderPanel(); renderMarkers(); save(); saveLast();
+}
+function addFiles(files) {
+  files = [...files];
+  // a tile waiting for this file name (after "resume" or a shared link) gets it first
+  S.angles.forEach(a => {
+    if (a.kind || !a.want) return;
+    const n = files.findIndex(f => f.name === a.want);
+    if (n >= 0) loadFile(a, files.splice(n, 1)[0]);
+  });
+  let skipped = 0;
+  files.forEach(f => {
+    const a = S.angles.find(x => !x.kind && !x.want) || newAngle();
+    if (a) loadFile(a, f); else skipped++;
+  });
+  if (skipped) toast(`アングルは${MAX}本までです（${skipped}本は入りませんでした）`, 3000);
+}
+function addYouTubeIds(ids) {
+  if (!ids.length) return;
+  if (IS_FILE) { toast('YouTubeは「マルチアングル起動.bat」かWeb版から開いたときに使えます', 3500); return; }
+  let skipped = 0;
+  ids.forEach(id => {
+    const a = S.angles.find(x => !x.kind && !x.want) || newAngle();
+    if (a) loadYouTube(a, id); else skipped++;
+  });
+  if (skipped) toast(`アングルは${MAX}本までです（${skipped}本は入りませんでした）`, 3000);
+}
+
+/* ---------- layout: presets and free placement ---------- */
+function presetRects(kind) {
+  const n = S.angles.length, rects = new Array(n);
+  if (!n) return rects;
+  const m = clamp(S.main, 0, n - 1);
+  if (kind === 'single') { S.angles.forEach((a, i) => { rects[i] = {x: 0, y: 0, w: 100, h: 100}; }); return rects; }
+  if (kind === 'grid' || n === 1) {
+    const cols = n === 1 ? 1 : n <= 4 ? 2 : 3, rows = Math.ceil(n / cols);
+    S.angles.forEach((a, i) => { rects[i] = {x: (i % cols) * 100 / cols, y: Math.floor(i / cols) * 100 / rows, w: 100 / cols, h: 100 / rows}; });
+    return rects;
+  }
+  const others = S.angles.map((a, i) => i).filter(i => i !== m);
+  if (wide() || landPhone()) {
+    const sp = clamp(prefs.split, 40, 90);
+    rects[m] = {x: 0, y: 0, w: sp, h: 100};
+    others.forEach((i, k) => { rects[i] = {x: sp, y: k * 100 / others.length, w: 100 - sp, h: 100 / others.length}; });
+  } else {
+    // phone: big one on top, the rest in a row underneath
+    const top = 100 * (1 / (1 + 1 / others.length));
+    rects[m] = {x: 0, y: 0, w: 100, h: top};
+    others.forEach((i, k) => { rects[i] = {x: k * 100 / others.length, y: top, w: 100 / others.length, h: 100 - top}; });
+  }
+  return rects;
+}
+function phoneStageHeight() {
+  const n = S.angles.length, W = stage.clientWidth || 360;
+  if (!n) return null;
+  if (S.layout === 'single') return W * 9 / 16;
+  if (S.layout === 'grid' || n === 1) { const cols = n === 1 ? 1 : n <= 4 ? 2 : 3; return Math.ceil(n / cols) * (W / cols) * 9 / 16; }
+  return W * 9 / 16 * (1 + 1 / (n - 1));
+}
+function toCustom() {
+  if (S.layout === 'custom') return;
+  const r = presetRects(S.layout);
+  S.angles.forEach((a, i) => a.rect = {...r[i]});
+  S.layout = 'custom'; prefs.layout = 'custom'; savePrefs();
+  renderLayoutSeg();
+}
+function setLayout(l) {
+  if (l === 'custom') {
+    const saved = prefs.custom[S.angles.length];
+    if (saved && saved.length === S.angles.length) S.angles.forEach((a, i) => a.rect = {...saved[i]});
+    else { const r = presetRects(S.layout === 'custom' ? 'focus' : S.layout); S.angles.forEach((a, i) => a.rect = a.rect || {...r[i]}); }
+  }
+  S.layout = l; prefs.layout = l; savePrefs();
+  render();
+}
+const landH = chips => Math.max(150, innerHeight - 58 - 40 - 24 - (chips ? 46 : 0));
+function layoutTiles() {
+  const n = S.angles.length;
+  const W = stage.clientWidth || 360;
+  if (S.sync) {
+    // sync: the reference on the left (or top), the angle being matched next to it
+    const y = S.sync, act = syncActive(), vis = y.step === 0 ? [y.ref] : [y.ref, act];
+    const side = wide() || landPhone();
+    if (landPhone()) stage.style.height = landH(false) + 'px';
+    else if (!wide()) stage.style.height = W * 9 / 16 * (side ? 1 : vis.length) + 'px'; else stage.style.height = '';
+    S.angles.forEach((a, i) => {
+      const k = vis.indexOf(i);
+      a.el.classList.toggle('synchide', k < 0);
+      a.el.classList.toggle('syncref', y.step > 0 && i === y.ref);
+      a.el.classList.remove('focusmain', 'offstage');
+      if (k < 0) return;
+      const r = vis.length === 1 ? {x: 0, y: 0, w: 100, h: 100} : side ? {x: k * 50, y: 0, w: 50, h: 100} : {x: 0, y: k * 50, w: 100, h: 50};
+      Object.assign(a.el.style, {left: `calc(${r.x}% + 3px)`, top: `calc(${r.y}% + 3px)`, width: `calc(${r.w}% - 6px)`, height: `calc(${r.h}% - 6px)`, zIndex: 1});
+    });
+    $('#camchips').hidden = true;
+    return;
+  }
+  S.angles.forEach(a => a.el.classList.remove('synchide', 'syncref'));
+  const mode = S.theater ? 'single' : (!wide() && S.layout === 'custom') ? 'focus' : S.layout;
+  if (S.theater) stage.style.height = '';
+  else if (landPhone()) stage.style.height = landH(mode === 'single' && n > 1) + 'px';
+  else if (!wide()) { const h = phoneStageHeight(); stage.style.height = h ? h + 'px' : ''; } else stage.style.height = '';
+  const rects = mode === 'custom' ? S.angles.map((a, i) => a.rect || presetRects('focus')[i]) : presetRects(mode);
+  S.angles.forEach((a, i) => {
+    const r = rects[i]; if (!r) return;
+    Object.assign(a.el.style, {left: `calc(${r.x}% + 3px)`, top: `calc(${r.y}% + 3px)`, width: `calc(${r.w}% - 6px)`, height: `calc(${r.h}% - 6px)`, zIndex: mode === 'custom' ? a.zi : (i === S.main ? 2 : 1)});
+    a.el.classList.toggle('focusmain', mode === 'focus' && i === S.main && n > 1);
+    a.el.classList.toggle('offstage', mode === 'single' && i !== S.main);
+  });
+  requestAnimationFrame(() => S.angles.forEach(a => a.el.classList.toggle('tiny', a.el.clientWidth > 0 && a.el.clientWidth < 150)));
+  renderChips(mode);
+}
+function renderChips(mode) {
+  const box = $('#camchips');
+  const show = !S.sync && !S.theater && mode === 'single' && S.angles.length > 1;
+  if (S.theater) renderTheaterCams();
+  box.hidden = !show; if (!show) return;
+  box.innerHTML = '';
+  box.style.setProperty('--cols', Math.min(S.angles.length, wide() ? 6 : 3));
+  S.angles.forEach((a, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `<b>${i + 1}</b><span>${esc(a.label)}</span>`;
+    b.title = a.label;
+    b.classList.toggle('on', i === S.main);
+    b.disabled = !a.kind;
+    b.addEventListener('click', () => setMain(i));
+    box.appendChild(b);
+  });
+}
+function saveCustom() {
+  if (S.layout !== 'custom') return;
+  prefs.custom[S.angles.length] = S.angles.map(a => a.rect); savePrefs();
+}
+function startMove(e, a, what) {
+  if (!wide() || S.sync) return;
+  e.preventDefault(); e.stopPropagation();
+  const W = stage.clientWidth, H = stage.clientHeight;
+  const handle = e.currentTarget; try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+  const focusSplit = what === 'size' && S.layout === 'focus' && idx(a) === S.main && S.angles.length > 1;
+  if (!focusSplit) toCustom();
+  a.zi = ++ZTOP; a.el.style.zIndex = a.zi;
+  const r0 = a.rect ? {...a.rect} : null, sp0 = prefs.split, x0 = e.clientX, y0 = e.clientY;
+  stage.classList.add('moving');
+  const snap = v => Math.round(v * 2) / 2;
+  const move = ev => {
+    const dx = (ev.clientX - x0) / W * 100, dy = (ev.clientY - y0) / H * 100;
+    if (focusSplit) { prefs.split = clamp(sp0 + dx, 40, 90); layoutTiles(); return; }
+    const r = a.rect;
+    if (what === 'move') { r.x = snap(clamp(r0.x + dx, 0, 100 - r.w)); r.y = snap(clamp(r0.y + dy, 0, 100 - r.h)); }
+    else { r.w = snap(clamp(r0.w + dx, 12, 100 - r.x)); r.h = snap(clamp(r0.h + dy, 12, 100 - r.y)); }
+    layoutTiles();
+  };
+  const end = () => {
+    handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end);
+    stage.classList.remove('moving');
+    if (focusSplit) savePrefs(); else saveCustom();
+  };
+  handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+}
+window.addEventListener('resize', () => { layoutTiles(); if (S.theater) renderTheaterCams(); });
+
+/* ---------- playback & sync engine ---------- */
+function applyAudio() { S.angles.forEach((a, i) => a.src.setMuted((i !== S.main) || S.muted || S.forceMute)); }
+function handleBlocked(a) {
+  const s = a.src;
+  if (!s.triedMuted) {
+    // phones only allow automatic playback without sound: try again muted
+    s.triedMuted = true; S.forceMute = true; applyAudio(); render();
+    s.playAt = now(); try { s.p.playVideo(); } catch (e) {}
+    toast('スマホの決まりで、音なしで再生します。音を出すには「音なし」ボタンを押してください', 5000);
+  } else if (!a.el.classList.contains('tapme') && now() - s.playAt > 2500) {
+    a.el.classList.add('tapme'); // let the viewer press YouTube's own play button once
+  }
+}
+function setMain(i) {
+  if (!S.angles[i]) return;
+  S.mainChosen = true;
+  const prev = mainA();
+  S.main = i; applyAudio(); render(); renderPanel();
+  if (S.light && S.playing && prev && prev !== mainA()) { if (prev.ready) prev.src.pause(); if (mainA().ready) drive(mainA()); }
+}
+function inRange(a, t) { const x = t + a.off; return x >= 0 && x <= a.dur - 0.05; }
+const lead = s => clamp(s.bufMs / 1000 * S.rate, 0.2, 2.5);
+
+function drive(a) {
+  const s = a.src, tgt = S.t + a.off, isMain = a === mainA();
+  if (!inRange(a, S.t)) {
+    if (!s.paused) s.pause();
+    if (!s.seeking) { const edge = tgt < 0 ? 0 : a.dur - 0.05; if (Math.abs(s.time - edge) > 0.5) s.time = edge; }
+    return;
+  }
+  if (S.light && !isMain) { if (!s.paused) s.pause(); return; }
+  if (s.paused) {
+    const thr = s.fine ? 0.1 : isMain ? 0.3 : 1.0;
+    if (Math.abs(s.time - tgt) > thr) s.time = (s.fine || isMain) ? tgt : tgt + lead(s);
+    s.setRate(S.rate); s.play();
+    return;
+  }
+  if (isMain || s.seeking) { s.setRate(S.rate); return; }
+  const drift = s.time - tgt;
+  if (s.fine) {
+    if (Math.abs(drift) > 0.35) { s.time = tgt + 0.05 * S.rate; s.setRate(S.rate); }
+    else if (Math.abs(drift) > 0.03) s.setRate(S.rate * clamp(1 - drift * 2, 0.85, 1.15));
+    else s.setRate(S.rate);
+    return;
+  }
+  // YouTube: small gaps are closed by playing one step slower/faster; only big gaps jump
+  if (Math.abs(drift) > 2) {
+    if (!s.driftAt) s.driftAt = now();
+    else if (now() - s.driftAt > 400) { s.time = tgt + lead(s); s.driftAt = 0; s.corr = 0; }
+    s.setRate(S.rate); return;
+  }
+  s.driftAt = 0;
+  if (s.corr) { if (Math.abs(drift) < 0.05 || Math.sign(drift) === s.corr) s.corr = 0; }
+  else if (Math.abs(drift) > 0.15) s.corr = drift > 0 ? -1 : 1;
+  s.setRate(S.rate, s.corr);
+}
+function play() {
+  if (!loaded().length || S.sync) return;
+  const [a0, tMax] = range();
+  if (S.t >= tMax - 0.05) seekAll(a0);
+  S.playing = true; S.holdAt = 0; loaded().forEach(drive); updatePlayIcon();
+  if (S.light && PHONE && !S.theater && loaded().length > 1 && !prefs.lightHinted) {
+    prefs.lightHinted = true; savePrefs();
+    toast('スマホでは通信を軽くするため、メインだけ再生しています。全部同時に動かすには「軽量」をオフに', 6000);
+  }
+}
+function pause() {
+  S.playing = false; S.angles.forEach(a => a.src.pause());
+  seekAll(S.t); updatePlayIcon();
+}
+const togglePlay = () => S.playing ? pause() : play();
+function seekAll(t) {
+  const [a0, a1] = range();
+  S.t = clamp(t, a0, a1);
+  loaded().forEach(a => {
+    a.src.time = clamp(S.t + a.off, 0, Math.max(0, a.dur - 0.05));
+    if (S.playing) drive(a);
+  });
+}
+const seekRel = d => seekAll(S.t + d);
+function frameStep(n) { if (S.playing) pause(); seekAll(S.t + n * FRAME); }
+function replay() { if (!loaded().length) return; seekAll(S.t - 5); if (!S.playing) play(); }
+function nudgeTile(a, d) { if (!a || !a.ready) return; a.src.pause(); a.src.time = clamp(a.src.time + d, 0, a.dur); }
+function setRate(r) { S.rate = r; S.angles.forEach(a => a.src.setRate(r)); renderRate(); toast(`再生速度 ${r}×`, 1000); }
+function stepRate(dir) { const k = RATES.indexOf(S.rate); setRate(RATES[clamp((k < 0 ? 3 : k) + dir, 0, RATES.length - 1)]); }
+function setLight(on) {
+  S.light = on; prefs.light = on; savePrefs();
+  $('#light').classList.toggle('on', on);
+  $('#light').textContent = on ? '軽量：オン' : '軽量';
+  if (S.playing) loaded().forEach(drive);
+}
+
+let last = now(), lastRefresh = 0;
+function tick(ts) {
+  const dt = Math.min(0.25, (ts - last) / 1000); last = ts;
+  if (S.playing && !S.sync) {
+    const m = mainA(), ms = m && m.src;
+    let hold = false;
+    if (m && m.ready && inRange(m, S.t)) {
+      if (ms.blocked) handleBlocked(m);
+      if (ms.inAd || ms.buffering) {
+        // the main angle is loading (or showing an ad): stop the clock and let the others wait,
+        // so they don't race ahead and keep re-loading
+        if (!S.holdAt) S.holdAt = now();
+        const held = now() - S.holdAt;
+        if (held > 250) { hold = true; loaded().forEach(a => { if (a !== m && !a.src.paused) a.src.pause(); }); }
+        if (!ms.inAd && held > 7000) { ms.time = S.t + m.off; S.holdAt = now(); } // nudge a stuck player
+      } else {
+        if (S.holdAt && now() - S.holdAt > 1200) noteStall();
+        S.holdAt = 0;
+        if (!ms.paused && !ms.seeking) S.t = ms.time - m.off; // the main angle is the clock
+      }
+    } else { S.holdAt = 0; S.t += dt * S.rate; }
+    const [, tMax] = range();
+    if (S.reel && S.t >= S.reel.end) reelGo(1);
+    else if (S.t >= tMax) { S.t = tMax; pause(); }
+    else if (!hold) loaded().forEach(drive);
+    // light mode: refresh the still pictures of the other angles now and then
+    if (S.light && !hold && now() - lastRefresh > 6000) {
+      lastRefresh = now();
+      loaded().forEach(a => { if (a !== m && inRange(a, S.t) && Math.abs(a.src.time - (S.t + a.off)) > 3) a.src.time = S.t + a.off; });
+    }
+  }
+  paint();
+  requestAnimationFrame(tick);
+}
+function noteStall() {
+  S.stalls = S.stalls.filter(x => now() - x < 30000); S.stalls.push(now());
+  if (S.stalls.length >= 3 && !S.light && !S.stallHinted && loaded().length > 1) {
+    S.stallHinted = true;
+    toast('通信が追いつかず止まりがちです。「軽量」をオンにすると、メインだけ再生して軽くなります', 6000);
+  }
+}
+
+/* ---------- sync mode ---------- */
+/* step 0: pick a clear moment on the reference angle; step 1..n: match each other angle to it, side by side */
+function enterSync(only) {
+  if (S.theater) exitTheater();
+  if (loaded().length < 2) { toast('同期は、動画が2本以上あるときに使います'); return; }
+  if (S.playing) pause();
+  stopReel();
+  let ref = mainA() && mainA().ready ? S.main : idx(loaded()[0]);
+  if (only != null && only === ref) ref = idx(loaded().find(a => idx(a) !== only));
+  const targets = only != null ? [only] : S.angles.map((a, i) => i).filter(i => i !== ref && S.angles[i].ready);
+  S.sync = {ref, targets, step: only != null ? 1 : 0, back: {t: S.t, offs: S.angles.map(a => a.off), main: S.main}};
+  syncShow();
+}
+const syncActive = () => S.sync.step === 0 ? S.sync.ref : S.sync.targets[S.sync.step - 1];
+function syncShow() {
+  const y = S.sync, ref = S.angles[y.ref];
+  S.angles.forEach(a => a.src.pause());
+  if (y.step > 0) {
+    // start the angle near the same moment using the current offsets, so it only needs a small adjustment
+    const a = S.angles[syncActive()];
+    a.src.time = clamp(ref.src.time - ref.off + a.off, 0, a.dur);
+  }
+  S.main = syncActive(); applyAudio();
+  render(); renderSyncBar();
+}
+function renderSyncBar() {
+  const y = S.sync, bar = $('#syncbar');
+  bar.hidden = !y; if (!y) return;
+  const ref = S.angles[y.ref], keys = '<span class="sub">映像の下のつまみ・ボタン、または <kbd>←</kbd><kbd>→</kbd>（5秒）<kbd>,</kbd><kbd>.</kbd>（1コマ）、映像クリックで再生／停止</span>';
+  let html;
+  if (y.step === 0) html = `<div class="bt"><strong>同期 ① 基準の瞬間を決める</strong>　「${esc(ref.label)}」で、どのカメラにも映っている分かりやすい瞬間（キックオフで蹴った瞬間、笛など）を探して止めてください。<br>${keys}</div>`;
+  else { const a = S.angles[syncActive()]; html = `<div class="bt"><strong>同期 ② 同じ瞬間に合わせる（${y.step} / ${y.targets.length}）</strong>　${wide() || landPhone() ? '右' : '下'}の「${esc(a.label)}」を、${wide() || landPhone() ? '左' : '上'}の基準と同じ瞬間にしてください。<br>${keys}</div>`; }
+  const last = y.step >= y.targets.length;
+  bar.innerHTML = html + `<div class="sbtns">${y.step > 0 && y.targets.length > 1 ? '<button class="btn" data-s="back">戻る</button>' : ''}<button class="btn pri" data-s="next">${last ? '完了' : '次へ'}</button><button class="btn" data-s="cancel">やめる</button></div>`;
+  bar.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => {
+    const s = b.dataset.s;
+    if (s === 'next') { if (last) applySync(); else { y.step++; syncShow(); } }
+    else if (s === 'back') { y.step--; syncShow(); }
+    else cancelSync();
+  }));
+}
+function applySync() {
+  const y = S.sync, ref = S.angles[y.ref], base = ref.src.time;
+  y.targets.forEach(i => { const a = S.angles[i]; a.off = a.src.time - base + ref.off; });
+  S.t = base - ref.off; S.main = y.ref; S.sync = null;
+  S.angles.forEach(a => a.src.pause());
+  applyAudio(); save(); renderSyncBar();
+  render(); renderPanel(); seekAll(S.t); setTab('tags'); toast('同期しました。再生しながらタグを付けられます');
+}
+function cancelSync() {
+  const y = S.sync; if (!y) return;
+  S.sync = null; S.angles.forEach(a => a.src.pause());
+  S.angles.forEach((a, k) => { if (k < y.back.offs.length) a.off = y.back.offs[k]; });
+  S.main = clamp(y.back.main, 0, S.angles.length - 1); applyAudio();
+  renderSyncBar(); render(); seekAll(y.back.t);
+}
+function switchAngle(d) {
+  const L = S.angles.map((a, i) => i).filter(i => S.angles[i].ready);
+  if (L.length < 2) return;
+  const k = L.indexOf(S.main);
+  setMain(L[(k + d + L.length) % L.length]);
+  toast(`${S.main + 1}. ${mainA().label}`, 900);
+}
+
+/* ---------- tags ---------- */
+function addMarker(tag, t = S.t, note = '', side = 'us') {
+  if (S.readOnly) { toast('閲覧用のリンクなので、タグは付けられません'); return; }
+  if (!loaded().length) { toast('先に動画を読み込んでください'); return; }
+  side = tag.k === 'memo' ? '' : side;
+  S.markers.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t, tag: tag.k, note, cam: S.main, by: prefs.name || '', side});
+  S.markers.sort((x, y) => x.t - y.t);
+  if (prefs.tab !== 'tags') setTab('tags');
+  renderMarkers(); save(); toast(`${tag.name}${side ? '（' + SIDES[side].name + '）' : ''}  ${fmt(t)}`, 1200);
+}
+const visibleMarkers = () => S.markers.filter(m => (S.filter === 'all' || m.tag === S.filter) && (!S.sideFilter || m.side === S.sideFilter));
+function jumpTo(m) {
+  if (m.cam != null && S.angles[m.cam] && S.angles[m.cam].ready && m.cam !== S.main) setMain(m.cam);
+  seekAll(m.t - prefs.pre);
+  if (!S.playing) play();
+}
+function startReel() {
+  const list = visibleMarkers();
+  if (!list.length) { toast('連続再生するタグがありません'); return; }
+  if (S.sync) cancelSync();
+  S.reel = {list: [...list], idx: 0, end: 0};
+  reelShow();
+}
+function reelShow() { const m = S.reel.list[S.reel.idx]; S.reel.end = m.t + prefs.post; jumpTo(m); renderReel(); }
+function reelGo(d) {
+  if (!S.reel) return;
+  const n = S.reel.idx + d;
+  if (n < 0) { reelShow(); return; }
+  if (n >= S.reel.list.length) { stopReel(); pause(); toast('連続再生が終わりました'); return; }
+  S.reel.idx = n; reelShow();
+}
+function stopReel() { if (!S.reel) return; S.reel = null; renderReel(); }
+function renderReel() {
+  $('#reelbar').hidden = !S.reel;
+  if (!S.reel) return;
+  const m = S.reel.list[S.reel.idx], tag = tagOf(m.tag);
+  $('#reelText').innerHTML = `<strong>連続再生中</strong>　${S.reel.idx + 1} / ${S.reel.list.length}　${esc(tag.name)}${sideBadge(m)} ${fmt(m.t)}${m.note ? '　' + esc(m.note) : ''}`;
+}
+let rowById = {};
+function renderMarkers() {
+  const list = $('#mlist'); list.innerHTML = ''; rowById = {};
+  $('#tagCnt').textContent = S.markers.length;
+  const vis = visibleMarkers();
+  if (!vis.length) {
+    list.innerHTML = S.markers.length
+      ? '<p class="mempty">この種類のタグはまだありません。</p>'
+      : S.readOnly ? '<p class="mempty">タグはありません。</p>'
+      : '<p class="mempty">再生中に上のボタンを押すと、その瞬間にタグが付きます。左の列が自チーム、右の列が相手のプレー（ペナルティは反則をしたチーム）。一覧の時刻を押すと、その場面の少し前から再生します。</p>';
+  }
+  vis.forEach(m => {
+    const tag = tagOf(m.tag);
+    const cam = m.cam != null && S.angles[m.cam] ? `<span class="cam">CAM${m.cam + 1}</span>` : '';
+    const row = document.createElement('div'); row.className = 'mrow';
+    row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto';
+    row.innerHTML = `<button class="mt" title="この場面へ">${fmt(m.t)}</button><span class="chip" style="--c:${tag.c};border-color:${tag.c}">${tag.name}${sideBadge(m)}${cam}</span>
+      <div><input placeholder="メモ" aria-label="メモ" style="width:100%">${m.by ? `<span class="by">${esc(m.by)}</span>` : ''}</div><button class="sh" title="この場面から開く共有リンクをコピー">共有</button><button class="x" aria-label="削除" title="削除">×</button>`;
+    row.querySelector('.sh').addEventListener('click', () => shareTag(m));
+    const inp = row.querySelector('input'); inp.value = m.note || '';
+    if (S.readOnly) { inp.readOnly = true; if (!m.note) inp.placeholder = ''; }
+    inp.addEventListener('input', () => { m.note = inp.value; save(); });
+    row.querySelector('.mt').addEventListener('click', () => { stopReel(); jumpTo(m); });
+    row.querySelector('.x').addEventListener('click', () => { S.markers = S.markers.filter(x => x !== m); renderMarkers(); save(); });
+    list.appendChild(row); rowById[m.id] = row;
+  });
+  renderFilters(); paintMarks();
+}
+function renderFilters() {
+  const box = $('#filters'); box.innerHTML = '';
+  const sc = {us: 0, op: 0}; S.markers.forEach(m => { if (sc[m.side] != null) sc[m.side]++; });
+  if (sc.us || sc.op) {
+    [['', 'どちらも'], ['us', '自チーム ' + sc.us], ['op', '相手 ' + sc.op]].forEach(([k, label]) => {
+      const b = document.createElement('button'); b.textContent = label;
+      if (k) b.style.setProperty('--c', k === 'us' ? 'var(--enji-hi)' : '#6b8fb8');
+      b.classList.toggle('on', (S.sideFilter || '') === k);
+      b.addEventListener('click', () => { S.sideFilter = k; renderMarkers(); });
+      box.appendChild(b);
+    });
+    const br = document.createElement('span'); br.className = 'sep'; box.appendChild(br);
+  }
+  const counts = {}; S.markers.forEach(m => counts[m.tag] = (counts[m.tag] || 0) + 1);
+  [{k: 'all', name: 'すべて', c: ''}, ...TAGS].forEach(t => {
+    if (t.k !== 'all' && !counts[t.k]) return;
+    const b = document.createElement('button');
+    b.textContent = `${t.name} ${t.k === 'all' ? S.markers.length : counts[t.k]}`;
+    if (t.c) b.style.setProperty('--c', t.c);
+    b.classList.toggle('on', S.filter === t.k);
+    b.addEventListener('click', () => { S.filter = t.k; renderMarkers(); });
+    box.appendChild(b);
+  });
+  box.hidden = !S.markers.length;
+}
+function paintMarks() {
+  const [a0, a1] = range(), span = a1 - a0, box = $('#marks'), box2 = $('#tMarks'); box.innerHTML = ''; box2.innerHTML = '';
+  if (span <= 0) return;
+  S.markers.forEach(m => {
+    const i = document.createElement('i'); i.style.left = ((m.t - a0) / span * 100) + '%'; i.style.background = tagOf(m.tag).c;
+    if (m.side) i.className = m.side; // own plays on the upper half, opponent's on the lower half
+    box.appendChild(i);
+    const j = document.createElement('s'); j.style.left = i.style.left; j.style.background = tagOf(m.tag).c; if (m.side) j.className = m.side; box2.appendChild(j);
+  });
+}
+$('#copyMarks').addEventListener('click', () => {
+  if (!S.markers.length) { toast('タグがまだありません'); return; }
+  const text = S.markers.map(m => `${fmt(m.t)}\t${tagOf(m.tag).name}${sideText(m)}\t${m.cam != null && S.angles[m.cam] ? 'CAM' + (m.cam + 1) + ' ' + S.angles[m.cam].label : ''}\t${m.note || ''}`).join('\n');
+  copyText(text, 'タグ一覧をコピーしました');
+});
+function copyText(text, okMsg) {
+  const fallback = () => {
+    let ta = document.querySelector('.copybox');
+    if (!ta) { ta = document.createElement('textarea'); ta.className = 'copybox'; $('#mlist').after(ta); }
+    setTab('tags'); ta.value = text; ta.focus(); ta.select(); toast('選択された文字を Ctrl+C でコピーしてください', 3000);
+  };
+  try { navigator.clipboard.writeText(text).then(() => toast(okMsg, 3000), fallback); } catch (e) { fallback(); }
+}
+const OP_KEYS = ['Q', 'W', 'E', 'R', 'T'];
+function buildTagButtons(box, big, onPick) {
+  box.innerHTML = '<div class="th us">自チーム</div><div class="th op">相手</div>';
+  TAGS.forEach((tag, n) => {
+    const sides = tag.k === 'memo' ? [''] : ['us', 'op'];
+    sides.forEach(side => {
+      const b = document.createElement('button'); b.style.setProperty('--c', tag.c);
+      if (!side) b.className = 'wide';
+      const key = big ? '' : `<kbd>${!side ? 'B' : side === 'us' ? '⇧' + (n + 1) : '⇧' + OP_KEYS[n]}</kbd>`;
+      b.innerHTML = `<span>${tag.name}</span>${key}`;
+      b.title = side ? `${tag.name}（${SIDES[side].name}）` : tag.name;
+      b.addEventListener('click', () => onPick(tag, side));
+      box.appendChild(b);
+    });
+  });
+}
+buildTagButtons($('#tags'), false, (tag, side) => addMarker(tag, S.t, '', side));
+$('#preSel').value = String(prefs.pre); $('#postSel').value = String(prefs.post);
+$('#preSel').addEventListener('change', e => { prefs.pre = +e.target.value; savePrefs(); });
+$('#postSel').addEventListener('change', e => { prefs.post = +e.target.value; savePrefs(); });
+$('#reelStart').addEventListener('click', startReel);
+$('#reelNext').addEventListener('click', () => reelGo(1));
+$('#reelPrev').addEventListener('click', () => reelGo(-1));
+$('#reelStop').addEventListener('click', () => { stopReel(); pause(); });
+
+/* ---------- share link & resume ---------- */
+const b64u = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = str => { const s = atob(str.replace(/-/g, '+').replace(/_/g, '/')); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
+async function encodeShare(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  if (window.CompressionStream) return 'z' + b64u(new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()));
+  return 'j' + b64u(bytes);
+}
+async function decodeShare(str) {
+  let bytes = unb64u(str.slice(1));
+  if (str[0] === 'z') bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+const shortCache = {};
+async function shorten(data) {
+  if (!SHORT_API) return null;
+  if (shortCache[data]) return shortCache[data];
+  const ctl = window.AbortController ? new AbortController() : null;
+  const tm = setTimeout(() => ctl && ctl.abort(), 9000);
+  try {
+    const r = await fetch(SHORT_API, {method: 'POST', body: data, signal: ctl ? ctl.signal : undefined});
+    const j = await r.json();
+    if (j && j.k) return (shortCache[data] = j.k);
+  } catch (e) {} finally { clearTimeout(tm); }
+  return null;
+}
+async function buildShareUrl(jump) {
+  const obj = {v: 3, n: S.title || '',
+    s: S.angles.map(a => a.kind === 'yt' ? ['y', a.ytid, a.label, +a.off.toFixed(3)] : a.kind === 'file' ? ['f', a.name, a.label, +a.off.toFixed(3)] : 0),
+    m: S.markers.map(m => [+m.t.toFixed(2), m.tag, m.note || '', m.cam == null ? -1 : m.cam, m.id, m.by || '', m.side || ''])};
+  if (S.readOnly || !prefs.shareEdit) obj.ro = 1; // view-only: whoever opens it can't add, edit or delete tags
+  if (jump) obj.j = [+jump.t.toFixed(2), jump.cam == null ? -1 : jump.cam];
+  const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : PAGES_URL;
+  // openExternalBrowser=1: when tapped in LINE, it opens in the phone's normal browser instead of LINE's own
+  const data = await encodeShare(obj);
+  const k = await shorten(data); // falls back to the long link when offline or the short-link service fails
+  return base + '?openExternalBrowser=1#' + (k ? 'k=' + k : 's=' + data);
+}
+// copy text that is still being prepared (e.g. waiting for the short link) without losing the tap that asked for it
+function copyLater(p, okMsg) {
+  if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+    try {
+      navigator.clipboard.write([new ClipboardItem({'text/plain': p.then(t => new Blob([t], {type: 'text/plain'}))})])
+        .then(() => toast(okMsg, 3000), () => p.then(t => copyText(t, okMsg)));
+      return;
+    } catch (e) {}
+  }
+  p.then(t => copyText(t, okMsg));
+}
+function tagSummary() {
+  return TAGS.map(t => {
+    const L = S.markers.filter(m => m.tag === t.k); if (!L.length) return '';
+    const us = L.filter(m => m.side === 'us').length, op = L.filter(m => m.side === 'op').length;
+    return t.k === 'memo' || (!us && !op) ? `${t.name}${L.length}` : `${t.name}（${[us ? '自' + us : '', op ? '相手' + op : ''].filter(Boolean).join('・')}）`;
+  }).filter(Boolean).join(' ');
+}
+let shareUrl = '', shareSeq = 0, sharePromise = Promise.resolve(), shareTimer = 0;
+function refreshShare() { return (sharePromise = refreshShareNow()); }
+async function refreshShareNow() {
+  S.title = $('#shTitle').value.trim(); $('#matchTitle').value = S.title;
+  prefs.name = $('#shName').value.trim(); savePrefs();
+  const here = $('#shHere').checked, seq = ++shareSeq;
+  if (SHORT_API) $('#shText').value = 'リンクを作成中…';
+  let url = '';
+  try { url = await buildShareUrl(here ? {t: S.t, cam: S.main} : null); } catch (e) { url = ''; }
+  if (seq !== shareSeq) return sharePromise; // a newer edit is already being prepared
+  shareUrl = url;
+  const files = S.angles.some(a => a.kind === 'file');
+  $('#shText').value = [
+    `【KURFC 試合映像】${S.title || '試合の映像'}`,
+    shareUrl,
+    `アングル${S.angles.filter(a => a.kind).length}本・タグ${S.markers.length}件${S.markers.length ? '（' + tagSummary() + '）' : ''}`,
+    here ? `${fmt(S.t, false)} の場面から開きます` : '',
+    (S.readOnly || !prefs.shareEdit) ? '（見るだけのリンクです）' : '',
+    files ? '※パソコンの動画ファイルは入っていないので、各自で同じファイルを選んでください' : ''
+  ].filter(Boolean).join('\n');
+  save();
+}
+$('#shareBtn').addEventListener('click', () => {
+  if (!S.angles.some(a => a.kind)) { toast('先に動画を読み込んでください'); return; }
+  $('#shTitle').value = S.title || ''; $('#shName').value = prefs.name || ''; $('#shHere').checked = false;
+  $('#shEdit').checked = !!prefs.shareEdit; $('#shEditRow').hidden = S.readOnly;
+  $('#shNow').textContent = fmt(S.t, false);
+  $('#sharePop').hidden = false; refreshShare();
+});
+['shTitle', 'shName'].forEach(id => $('#' + id).addEventListener('input', () => {
+  // wait until typing pauses so every keystroke doesn't ask for a new short link
+  clearTimeout(shareTimer); const seq = ++shareSeq;
+  sharePromise = new Promise(res => { shareTimer = setTimeout(() => { if (seq === shareSeq) refreshShare().then(res); }, 600); });
+}));
+$('#shHere').addEventListener('change', refreshShare);
+$('#shEdit').addEventListener('change', e => { prefs.shareEdit = e.target.checked; savePrefs(); refreshShare(); });
+$('#shClose').addEventListener('click', () => $('#sharePop').hidden = true);
+$('#sharePop').addEventListener('click', e => { if (e.target.id === 'sharePop') $('#sharePop').hidden = true; });
+$('#shCopyUrl').addEventListener('click', () => copyLater(sharePromise.then(() => shareUrl), 'リンクをコピーしました'));
+$('#shCopyText').addEventListener('click', () => copyLater(sharePromise.then(() => $('#shText').value), 'コピーしました。LINEなどに貼って送れます'));
+async function shareTag(m) {
+  const tag = tagOf(m.tag);
+  if (SHORT_API) toast('リンクを作成中…', 1500);
+  copyLater(buildShareUrl({t: m.t - prefs.pre, cam: m.cam})
+    .then(url => `【${S.title ? S.title + ' ' : ''}${tag.name}${sideText(m)} ${fmt(m.t, false)}】${m.note ? m.note : ''}\n${url}`)
+    .catch(() => ''), 'この場面のリンクをコピーしました');
+}
+function applyPlan(slots, markers) {
+  slots.filter(Boolean).slice(0, MAX).forEach(p => {
+    const a = S.angles.find(x => !x.kind && !x.want) || newAngle(p.label); if (!a) return;
+    a.label = p.label || a.label; a.pending = p;
+    if (p.k === 'y') loadYouTube(a, p.id);
+    else if (p.k === 'f') a.want = p.name;
+  });
+  if (markers) { S.markers = markers; renderMarkers(); }
+  render(); renderPanel();
+  if (slots.some(p => p && p.k === 'f')) setTab('angles');
+}
+async function openShared() {
+  const m = location.hash.match(/^#s=([\w-]+)$/), mk = location.hash.match(/^#k=([A-Za-z0-9]{4,12})$/);
+  if (!m && !mk) return false;
+  S.shared = true;
+  try {
+    let str = m && m[1];
+    if (mk) {
+      if (!SHORT_API) throw new Error('no api');
+      toast('共有された分析を読み込み中…', 4000);
+      const j = await (await fetch(SHORT_API + '?k=' + mk[1])).json();
+      if (!j || !j.d) { S.shared = false; toast('このリンクの分析が見つかりませんでした', 4000); return false; }
+      str = j.d;
+    }
+    const d = await decodeShare(str);
+    const slots = (d.s || []).map(x => x ? {k: x[0], id: x[0] === 'y' ? x[1] : null, name: x[0] === 'f' ? x[1] : null, label: x[2], off: x[3]} : null);
+    // older links kept empty slots; tag camera numbers refer to the list without them
+    const map = []; let k = 0; slots.forEach((p, i) => { map[i] = p ? k++ : null; });
+    const markers = (d.m || []).map((x, n) => ({id: x[4] || 'sh' + n, t: x[0], tag: x[1], note: x[2], cam: x[3] < 0 || map[x[3]] == null ? null : map[x[3]], by: x[5] || '', side: x[6] || ''}));
+    S.shared = true;
+    if (d.ro) { S.readOnly = true; document.body.classList.add('readonly'); $('#robar').hidden = false; setTab('tags'); }
+    if (d.n) { S.title = d.n; $('#matchTitle').value = d.n; }
+    if (d.j) S.jump = {t: d.j[0], cam: d.j[1] < 0 || map[d.j[1]] == null ? null : map[d.j[1]]};
+    applyPlan(slots, markers);
+    toast('共有された分析を開きました', 2500);
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    return true;
+  } catch (e) { S.shared = false; toast(mk ? '共有リンクを読み込めませんでした。電波の良い所でもう一度開いてください' : '共有リンクを読み取れませんでした', 4000); return false; }
+}
+$('#resumeBtn').addEventListener('click', () => {
+  const lastS = store.get('mav:last', null); if (!lastS) return;
+  applyPlan(lastS.slots.filter(Boolean).map(s => ({k: s.k, id: s.id, name: s.name, label: s.label})), null);
+  if (lastS.slots.some(s => s && s.k === 'f')) toast('パソコンの動画は、枠に表示されたファイルを選び直してください（まとめて選べます）', 4000);
+});
+
+/* ---------- YouTube add dialog ---------- */
+function openYtPop() {
+  if (IS_FILE) { toast('YouTubeは「マルチアングル起動.bat」かWeb版から開いたときに使えます', 3500); return; }
+  $('#ytPop').hidden = false; $('#ytText').value = ''; $('#ytText').focus();
+}
+const closeYtPop = () => { $('#ytPop').hidden = true; };
+$('#ytAdd').addEventListener('click', openYtPop);
+$('#addYt').addEventListener('click', openYtPop);
+$('#ytCancel').addEventListener('click', closeYtPop);
+$('#ytPop').addEventListener('click', e => { if (e.target.id === 'ytPop') closeYtPop(); });
+$('#ytOk').addEventListener('click', () => {
+  const ids = allYouTubeIds($('#ytText').value);
+  if (!ids.length) { toast('YouTubeの動画のURLが見つかりませんでした'); return; }
+  closeYtPop(); addYouTubeIds(ids);
+});
+$('#startYt').addEventListener('submit', e => {
+  e.preventDefault();
+  const ids = allYouTubeIds($('#startYtUrl').value);
+  if (!ids.length) { toast('YouTubeの動画のURLを貼り付けてください'); return; }
+  $('#startYtUrl').value = ''; addYouTubeIds(ids);
+});
+if (IS_FILE) { $('#startYt').hidden = true; $('#startHint').textContent = '動画ファイルはこの枠にドロップできます。YouTubeは「マルチアングル起動.bat」かWeb版から開くと使えます'; }
+
+/* ---------- render ---------- */
+function setTab(t) {
+  prefs.tab = t; savePrefs();
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+function renderRate() {
+  const seg = $('#rateSeg');
+  if (!seg.children.length) [0.25, 0.5, 1, 1.5, 2].forEach(r => {
+    const b = document.createElement('button'); b.textContent = r + '×'; b.dataset.r = r;
+    b.addEventListener('click', () => setRate(r)); seg.appendChild(b);
+  });
+  [...seg.children].forEach(b => b.classList.toggle('on', +b.dataset.r === S.rate));
+}
+function renderLayoutSeg() { document.querySelectorAll('#layoutSeg button').forEach(b => b.classList.toggle('on', b.dataset.l === S.layout)); }
+document.querySelectorAll('#layoutSeg button').forEach(b => b.addEventListener('click', () => setLayout(b.dataset.l)));
+function render() {
+  const n = S.angles.length;
+  S.main = clamp(S.main, 0, Math.max(0, n - 1));
+  stage.className = 'stage' + (S.sync ? ' syncing' : '') + (n ? '' : ' fresh');
+  $('#start').hidden = !!n;
+  $('#track').classList.toggle('disabled', S.sync);
+  $('#syncBtn').classList.toggle('on', S.sync);
+  $('#mute').textContent = (S.muted || S.forceMute) ? '音なし' : '音あり';
+  $('#mute').classList.toggle('on', S.muted || S.forceMute);
+  $('#resumeBtn').hidden = !!n || !store.get('mav:last', null);
+  $('#angCnt').textContent = n;
+  const hasV = loaded().length > 0;
+  $('#mbar').hidden = !hasV; document.body.classList.toggle('has-mbar', hasV);
+  if (S.theater && !hasV) exitTheater();
+  renderLayoutSeg();
+  S.angles.forEach((a, i) => {
+    const el = a.el;
+    el.classList.toggle('main', i === S.main);
+    el.classList.toggle('loaded', !!a.kind);
+    el.querySelector('.num').textContent = i + 1;
+    el.querySelector('.lbl').textContent = a.label;
+    el.querySelector('.elbl').textContent = `${i + 1}. ${a.label}`;
+    const want = el.querySelector('.want');
+    want.hidden = !a.want || !!a.kind;
+    want.textContent = a.want ? `「${a.want}」を選んでください` : '';
+    el.querySelector('.yt').hidden = a.kind !== 'yt';
+    el.querySelector('.aud').hidden = !(i === S.main && !S.muted && !S.forceMute && a.ready);
+    el.querySelector('.scrub').max = a.dur || 1;
+  });
+  layoutTiles();
+  renderLanes();
+}
+function renderLanes() {
+  const [a0, a1] = range(), span = a1 - a0, box = $('#lanes'); box.innerHTML = '';
+  S.angles.forEach((a, i) => {
+    if (!a.ready) return;
+    const lane = document.createElement('div'); lane.className = 'lane' + (i === S.main ? ' main' : '');
+    const bar = document.createElement('i');
+    bar.style.left = span > 0 ? ((-a.off - a0) / span * 100) + '%' : '0';
+    bar.style.width = span > 0 ? (a.dur / span * 100) + '%' : '100%';
+    lane.title = `${i + 1} ${a.label}`;
+    lane.appendChild(bar); box.appendChild(lane);
+  });
+  paintMarks();
+}
+function renderPanel() {
+  const box = $('#alist'); box.innerHTML = '';
+  if (!S.angles.length) box.innerHTML = '<p class="mempty">まだアングルがありません。下の「ファイル」か「YouTube」から追加してください。</p>';
+  S.angles.forEach((a, i) => {
+    const row = document.createElement('div'); row.className = 'arow' + (i === S.main ? ' main' : '');
+    const kindName = a.kind === 'yt' ? 'YouTube・' : '';
+    const meta = a.err ? '再生できません' : a.ready ? `${kindName}${a.name}・${fmt(a.dur, false)}` : a.kind ? '読み込み中…' : a.want ? `「${a.want}」を選んでください` : '動画がまだありません';
+    row.innerHTML = `<button class="num" title="メインにする">${i + 1}</button><input class="alabel" aria-label="アングル${i+1}の名前">
+      <div class="meta"></div>
+      ${a.ready ? `<div class="offs"><span class="k">ずれ</span>
+        <button data-o="-0.1">−0.1</button><button data-o="${-FRAME}">−1f</button>
+        <input type="number" step="0.01" aria-label="アングル${i+1}のずれ（秒）"><span class="k">秒</span>
+        <button data-o="${FRAME}">+1f</button><button data-o="0.1">+0.1</button></div>` : ''}
+      <div class="acts">
+        <button data-act="file">${a.kind ? 'ファイルに差し替え' : 'ファイルを選ぶ'}</button>
+        ${IS_FILE ? '' : `<button data-act="yt">${a.kind ? 'YouTubeに差し替え' : 'YouTube'}</button>`}
+        ${a.ready && loaded().length > 1 ? '<button data-act="resync">合わせ直す</button>' : ''}
+        <button data-act="remove">このアングルを外す</button>
+      </div>`;
+    row.querySelector('.meta').textContent = meta; row.querySelector('.meta').title = meta;
+    row.querySelector('.num').addEventListener('click', () => setMain(i));
+    const inp = row.querySelector('.alabel'); inp.value = a.label;
+    inp.addEventListener('input', () => { a.label = inp.value || LABELS[i] || `アングル${i + 1}`; render(); save(); });
+    const offIn = row.querySelector('.offs input');
+    const showOff = () => { if (offIn) offIn.value = a.off.toFixed(2); };
+    showOff();
+    if (offIn) offIn.addEventListener('change', () => {
+      const v = parseFloat(offIn.value); if (!isFinite(v)) { showOff(); return; }
+      a.off = v; renderLanes(); seekAll(S.t); save();
+    });
+    row.querySelectorAll('[data-o]').forEach(b => b.addEventListener('click', () => { a.off += +b.dataset.o; showOff(); renderLanes(); seekAll(S.t); save(); }));
+    row.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+      const act = b.dataset.act;
+      if (act === 'file') a.fileInput.click();
+      else if (act === 'remove') removeAngle(a);
+      else if (act === 'resync') enterSync(idx(a));
+      else if (act === 'yt') {
+        if (a.kind) clearSource(a);
+        a.want = null; setMain(i); render(); renderPanel();
+        const f = a.el.querySelector('.ytform input');
+        if (f) { f.focus(); a.el.scrollIntoView({block: 'nearest'}); }
+      }
+    }));
+    box.appendChild(row);
+  });
+  const full = S.angles.length >= MAX;
+  $('#addFile').disabled = full; $('#addYt').disabled = full || IS_FILE;
+  $('#addMax').textContent = full ? `（最大${MAX}本）` : `あと${MAX - S.angles.length}本`;
+}
+let lastTc = '', lastCur = 0;
+function paint() {
+  const [a0, a1] = range(), span = a1 - a0;
+  if (S.theater) {
+    const pp = span > 0 ? (S.t - a0) / span * 100 : 0;
+    $('#tFill').style.width = pp + '%'; $('#tHead').style.left = pp + '%';
+    const tt = `${fmt(S.t, false)} / ${fmt(a1, false)}`; if ($('#tTime').textContent !== tt) $('#tTime').textContent = tt;
+  }
+  const tc = `${fmt(S.t)} <small>/ ${fmt(a1, false)}</small>`;
+  if (tc !== lastTc) { $('#tc').innerHTML = tc; lastTc = tc; }
+  const p = span > 0 ? (S.t - a0) / span * 100 : 0;
+  $('#fill').style.width = p + '%'; $('#head').style.left = p + '%';
+  const m = mainA();
+  S.angles.forEach(a => {
+    if (!a.ready) return;
+    const s = a.src;
+    a.el.classList.toggle('ad', !!s.inAd);
+    a.el.classList.toggle('held', S.playing && S.light && a !== m && inRange(a, S.t));
+    const left = s.inAd ? adLeft(a) : null;
+    a.el.querySelector('.ctime').textContent = s.inAd ? (left != null ? `広告 あと${Math.ceil(left)}秒` : '広告中') : fmt(s.time);
+    a.el.classList.toggle('is-oor', !S.sync && !inRange(a, S.t) && Math.abs(S.t + a.off - a.dur) > 0.06);
+    if (S.sync) a.el.querySelector('.scrub').value = s.time;
+  });
+  // a notice in the middle of the picture while the main angle shows an ad
+  const ma = mainA(), note = $('#adnote');
+  const needTap = !!(ma && ma.el.classList.contains('tapme') && S.playing);
+  $('#app').classList.toggle('needtap', needTap);
+  note.classList.toggle('low', needTap);
+  if (ma && ma.ready && ma.src.inAd && S.playing) {
+    const left = adLeft(ma);
+    note.hidden = false;
+    $('#adLeft').textContent = left != null ? `広告 あと ${Math.ceil(left)} 秒` : '広告中';
+    $('#adSub').textContent = left != null ? '終わると自動で再開します（スキップが出たら押せます）' : '終わると自動で再開します。広告が続く場合もあります';
+  } else if (needTap && S.theater) {
+    // keep the middle of the picture free: YouTube's own play button is there, and a tap anywhere on the picture starts it
+    note.hidden = false;
+    $('#adLeft').textContent = '▶ 映像をタップすると再生が始まります';
+    $('#adSub').textContent = 'スマホでは最初の1回だけ必要です';
+  } else note.hidden = true;
+  $('#tapbar').hidden = !(needTap && !S.theater);
+  if (now() - lastCur > 250) {
+    lastCur = now();
+    S.markers.forEach(mk => { const r = rowById[mk.id]; if (r) r.classList.toggle('cur', S.t >= mk.t - prefs.pre && S.t <= mk.t + prefs.post); });
+  }
+}
+function updatePlayIcon() {
+  $('#playIcon').innerHTML = S.playing ? PAUSE_SVG : PLAY_SVG;
+  $('#mPlay svg').innerHTML = S.playing ? PAUSE_SVG : PLAY_SVG;
+  $('#tPlay svg').innerHTML = S.playing ? PAUSE_SVG : PLAY_SVG;
+  if (S.theater) poke();
+  $('#play').setAttribute('aria-label', S.playing ? '一時停止' : '再生');
+}
+
+/* ---------- timeline ---------- */
+const track = $('#track'), tip = $('#tip');
+let dragging = false, resume = false;
+function tFromX(x) {
+  const r = track.querySelector('.inner').getBoundingClientRect(), [a0, a1] = range();
+  return a0 + clamp((x - r.left) / r.width, 0, 1) * (a1 - a0);
+}
+function showTip(x) {
+  if (!loaded().length) { tip.hidden = true; return; }
+  const r = track.querySelector('.inner').getBoundingClientRect();
+  tip.hidden = false; tip.style.left = clamp(x - r.left, 0, r.width) + 'px'; tip.textContent = fmt(tFromX(x));
+}
+track.addEventListener('pointerdown', e => {
+  if (!loaded().length) return;
+  stopReel();
+  dragging = true; resume = S.playing; if (S.playing) { S.playing = false; S.angles.forEach(a => a.src.pause()); }
+  track.setPointerCapture(e.pointerId); seekAll(tFromX(e.clientX)); showTip(e.clientX);
+});
+track.addEventListener('pointermove', e => { showTip(e.clientX); if (dragging) seekAll(tFromX(e.clientX)); });
+track.addEventListener('pointerleave', () => { if (!dragging) tip.hidden = true; });
+const endDrag = () => { if (!dragging) return; dragging = false; tip.hidden = true; if (resume) play(); else updatePlayIcon(); };
+track.addEventListener('pointerup', endDrag); track.addEventListener('pointercancel', endDrag);
+
+/* wheel over the videos: 1 s per notch (Shift: 1 frame). Ctrl+wheel zooms (handled on the tile) */
+let wheelAt = 0;
+stage.addEventListener('wheel', e => {
+  if (e.ctrlKey || e.metaKey || !wide() || !loaded().length) return;
+  e.preventDefault();
+  if (now() - wheelAt < 70) return; wheelAt = now();
+  const dir = Math.sign(e.deltaY || e.deltaX); if (!dir) return;
+  const step = dir * (e.shiftKey ? FRAME : 1);
+  if (S.sync) { nudgeTile(mainA(), step); return; }
+  if (S.playing) pause();
+  seekAll(S.t + step);
+}, {passive: false});
+
+/* ---------- controls ---------- */
+$('#play').addEventListener('click', () => S.sync ? null : togglePlay());
+$('#replay').addEventListener('click', replay);
+document.querySelectorAll('[data-seek]').forEach(b => b.addEventListener('click', () => S.sync ? nudgeTile(mainA(), +b.dataset.seek) : seekRel(+b.dataset.seek)));
+document.querySelectorAll('[data-frame]').forEach(b => b.addEventListener('click', () => S.sync ? nudgeTile(mainA(), b.dataset.frame * FRAME) : frameStep(+b.dataset.frame)));
+function toggleMute() {
+  if (S.muted || S.forceMute) { S.muted = false; S.forceMute = false; } else S.muted = true;
+  applyAudio(); render();
+}
+$('#mute').addEventListener('click', toggleMute);
+$('#light').addEventListener('click', () => { setLight(!S.light); toast(S.light ? '軽量：メインだけ再生し、ほかは止めた絵で待機します' : '全部のアングルを同時に再生します', 3000); });
+$('#syncBtn').addEventListener('click', () => S.sync ? cancelSync() : enterSync());
+// 全画面 = the picture fills the page (works everywhere) + the browser's own full screen where allowed (hides the address bar)
+function toggleFs() { S.theater ? exitTheater() : enterTheater(false, true); }
+$('#fs').addEventListener('click', toggleFs);
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement) { S.fsAt = now(); return; }
+  // leaving the browser's full screen (Esc / back) also leaves our full-screen view — unless the browser dropped it right away
+  if (S.theater && S.fsByUs && now() - (S.fsAt || 0) > 800) { S.fsByUs = false; exitTheater(); }
+  else S.fsByUs = false;
+});
+$('#bulk').addEventListener('click', () => $('#bulkInput').click());
+$('#startFile').addEventListener('click', () => $('#bulkInput').click());
+$('#addFile').addEventListener('click', () => $('#bulkInput').click());
+$('#bulkInput').addEventListener('change', e => { addFiles([...e.target.files]); e.target.value = ''; });
+document.addEventListener('dragover', e => { e.preventDefault(); $('#start').classList.add('dragover'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) $('#start').classList.remove('dragover'); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); $('#start').classList.remove('dragover');
+  const files = videoFiles(e.dataTransfer.files);
+  if (files.length) { addFiles(files); return; }
+  addYouTubeIds(allYouTubeIds(e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')));
+});
+document.addEventListener('paste', e => {
+  if (e.target.matches && e.target.matches('input,textarea')) return;
+  const ids = allYouTubeIds((e.clipboardData || window.clipboardData).getData('text'));
+  if (!ids.length) return;
+  e.preventDefault(); addYouTubeIds(ids);
+});
+
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (e.key === 'Escape') {
+    if (!$('#ytPop').hidden) closeYtPop();
+    else if (S.theater && $('#tagSheet').hidden) exitTheater();
+    else if (!$('#sharePop').hidden) $('#sharePop').hidden = true;
+    else if (!$('#tagSheet').hidden) closeTagSheet();
+    else if (t.matches && t.matches('input,textarea')) t.blur();
+    else if (S.reel) stopReel();
+    else if (S.sync) cancelSync();
+    return;
+  }
+  if (!$('#ytPop').hidden || !$('#sharePop').hidden || !$('#tagSheet').hidden) return;
+  if (t.matches && t.matches('input:not([type=range]),textarea,select')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const dm = /^Digit([0-9])$/.exec(e.code);
+  if (dm) {
+    const n = +dm[1];
+    if (n === 0) { if (mainA()) setZoom(mainA(), 1, 0, 0); return; }
+    if (e.shiftKey) { if (n <= 5) { addMarker(TAGS[n - 1], S.t, '', 'us'); e.preventDefault(); } else if (n === 6) { addMarker(TAGS[5]); e.preventDefault(); } }
+    else if (n <= S.angles.length) setMain(n - 1);
+    return;
+  }
+  const opk = e.shiftKey ? OP_KEYS.indexOf(e.code.replace('Key', '')) : -1;
+  if (opk >= 0 && /^Key/.test(e.code)) { addMarker(TAGS[opk], S.t, '', 'op'); e.preventDefault(); return; }
+  switch (e.code) {
+    case 'Space': case 'KeyK': e.preventDefault();
+      if (S.sync) { const a = mainA(); if (a && a.ready) a.src.paused ? a.src.play() : a.src.pause(); }
+      else togglePlay(); return;
+    case 'ArrowLeft': case 'ArrowRight': {
+      e.preventDefault(); const d = (e.shiftKey ? 1 : 5) * (e.code === 'ArrowLeft' ? -1 : 1);
+      S.sync ? nudgeTile(mainA(), d) : seekRel(d); return; }
+    case 'KeyJ': S.sync ? nudgeTile(mainA(), -10) : seekRel(-10); return;
+    case 'KeyL': S.sync ? nudgeTile(mainA(), 10) : seekRel(10); return;
+    case 'KeyR': replay(); return;
+    case 'KeyN': reelGo(1); return;
+    case 'KeyP': reelGo(-1); return;
+    case 'KeyG': { const order = wide() ? ['focus', 'grid', 'single', 'custom'] : ['focus', 'grid', 'single']; setLayout(order[(order.indexOf(S.layout) + 1) % order.length]); return; }
+    case 'KeyM': toggleMute(); return;
+    case 'KeyF': toggleFs(); return;
+    case 'KeyS': S.sync ? cancelSync() : enterSync(); return;
+    case 'KeyB': addMarker(TAGS[5]); return;
+    case 'KeyV': toggleFs(); return;
+  }
+  if (e.key === ',' || e.key === '<') { S.sync ? nudgeTile(mainA(), -FRAME) : frameStep(-1); }
+  else if (e.key === '.' || e.key === '>') { S.sync ? nudgeTile(mainA(), FRAME) : frameStep(1); }
+  else if (e.key === '[') stepRate(-1);
+  else if (e.key === ']') stepRate(1);
+  else if (e.key === '?') setTab('help');
+});
+
+$('#mPlay').addEventListener('click', () => { if (S.sync) { const a = mainA(); if (a && a.ready) a.src.paused ? a.src.play() : a.src.pause(); } else togglePlay(); });
+$('#mBack').addEventListener('click', replay);
+$('#mBig').addEventListener('click', () => enterTheater(false, true));
+
+/* ---------- big view ---------- */
+let idleT = 0;
+// controls show, then fade after 3 s of playback (they stay while paused) — like the YouTube app
+function poke() {
+  $('#app').classList.remove('idle');
+  clearTimeout(idleT);
+  idleT = setTimeout(() => { if (S.theater && S.playing) $('#app').classList.add('idle'); }, 3000);
+}
+function hideControls() { clearTimeout(idleT); $('#app').classList.add('idle'); }
+let lastTap = null, tapT = 0;
+function theaterTap(e) {
+  const t = now(), x = e.clientX, W = innerWidth;
+  if (lastTap && t - lastTap.t < 300 && Math.abs(x - lastTap.x) < 90) {
+    // double tap: left side back 10 s, right side forward 10 s
+    clearTimeout(tapT); lastTap = null;
+    const d = x < W / 2 ? -10 : 10;
+    seekRel(d); flashSkip(d);
+    return;
+  }
+  lastTap = {t, x};
+  clearTimeout(tapT);
+  tapT = setTimeout(() => { lastTap = null; $('#app').classList.contains('idle') ? poke() : hideControls(); }, 260);
+}
+function flashSkip(d) {
+  const el = d < 0 ? $('#tFlashL') : $('#tFlashR');
+  el.textContent = (d < 0 ? '−' : '+') + Math.abs(d) + '秒';
+  el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 450);
+}
+function enterTheater(auto, real) {
+  if (!loaded().length) { toast('先に動画を読み込んでください'); return; }
+  if (real && !document.fullscreenElement) {
+    try { const el = document.documentElement, p = el.requestFullscreen && el.requestFullscreen({navigationUI: 'hide'}); if (p) { S.fsByUs = true; p.catch(() => { S.fsByUs = false; }); } } catch (e) {}
+  }
+  if (S.sync) cancelSync();
+  S.theater = true; S.theaterAuto = !!auto;
+  $('#app').classList.add('theater'); document.body.classList.add('theater-on');
+  render(); renderTheaterCams(); poke();
+}
+function exitTheater() {
+  if (document.fullscreenElement && S.fsByUs) { S.fsByUs = false; try { document.exitFullscreen(); } catch (e) {} }
+  S.theater = false; S.theaterAuto = false;
+  $('#app').classList.remove('theater', 'idle'); document.body.classList.remove('theater-on');
+  render();
+}
+function renderTheaterCams() {
+  const box = $('#tCams'); box.innerHTML = '';
+  if (S.angles.length < 2) return;
+  const W = innerWidth, n = S.angles.length;
+  box.style.setProperty('--cols', W >= 700 ? n : Math.min(n, 3));
+  S.angles.forEach((a, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `<b>${i + 1}</b><span>${esc(a.label)}</span>`;
+    b.title = a.label;
+    b.classList.toggle('on', i === S.main); b.disabled = !a.ready;
+    b.addEventListener('click', () => { setMain(i); poke(); });
+    box.appendChild(b);
+  });
+}
+$('#tClose').addEventListener('click', exitTheater);
+$('#tPlay').addEventListener('click', e => { e.stopPropagation(); togglePlay(); poke(); });
+$('#tBack').addEventListener('click', e => { e.stopPropagation(); seekRel(-10); flashSkip(-10); poke(); });
+$('#tFwd').addEventListener('click', e => { e.stopPropagation(); seekRel(10); flashSkip(10); poke(); });
+// a tap on the dimmed area around the centre buttons behaves like a tap on the picture
+$('#tcenter').addEventListener('click', e => { if (e.target === e.currentTarget) theaterTap(e); });
+$('#tTag').addEventListener('click', () => { openTagSheet(); poke(); });
+['pointerdown', 'pointermove'].forEach(ev => $('#tctl').addEventListener(ev, poke));
+(() => {
+  const prog = $('#tProg'); let drag = false, wasPlaying = false;
+  const tAt = x => { const r = prog.getBoundingClientRect(), [a0, a1] = range(); return a0 + clamp((x - r.left) / r.width, 0, 1) * (a1 - a0); };
+  prog.addEventListener('pointerdown', e => { if (!loaded().length) return; drag = true; wasPlaying = S.playing; if (S.playing) { S.playing = false; S.angles.forEach(a => a.src.pause()); } prog.setPointerCapture(e.pointerId); seekAll(tAt(e.clientX)); });
+  prog.addEventListener('pointermove', e => { if (drag) seekAll(tAt(e.clientX)); });
+  const end = () => { if (!drag) return; drag = false; if (wasPlaying) play(); else updatePlayIcon(); };
+  prog.addEventListener('pointerup', end); prog.addEventListener('pointercancel', end);
+})();
+// phones: turning sideways opens the big view, turning back closes it
+const landMQ = window.matchMedia('(orientation: landscape)');
+function onTurn() {
+  if (!PHONE) return;
+  if (landMQ.matches) { if (!S.theater && loaded().length && !S.sync) enterTheater(true); }
+  else if (S.theater && S.theaterAuto) exitTheater();
+}
+if (landMQ.addEventListener) landMQ.addEventListener('change', () => setTimeout(onTurn, 250));
+let sheetT = 0;
+function openTagSheet() {
+  if (S.readOnly) { toast('閲覧用のリンクなので、タグは付けられません'); return; }
+  if (!loaded().length) { toast('先に動画を読み込んでください'); return; }
+  sheetT = S.t; $('#tagSheetTime').textContent = fmt(sheetT); $('#sheetNote').value = '';
+  $('#tagSheet').hidden = false;
+}
+const closeTagSheet = () => { $('#tagSheet').hidden = true; };
+$('#mTag').addEventListener('click', openTagSheet);
+$('#sheetClose').addEventListener('click', closeTagSheet);
+$('#tagSheet').addEventListener('click', e => { if (e.target.id === 'tagSheet') closeTagSheet(); });
+buildTagButtons($('#tagsBig'), true, (tag, side) => { addMarker(tag, sheetT, $('#sheetNote').value.trim(), side); closeTagSheet(); });
+$('#matchTitle').addEventListener('input', e => { S.title = e.target.value.trim(); save(); });
+window.addEventListener('orientationchange', () => setTimeout(() => { render(); if (S.sync) renderSyncBar(); }, 300));
+
+if (IN_APP) { $('#inappbar').hidden = false; $('#inappClose').addEventListener('click', () => { $('#inappbar').hidden = true; }); }
+
+/* ---------- start ---------- */
+setTab(prefs.tab || 'help');
+setLight(S.light);
+renderRate(); render(); renderPanel(); renderMarkers(); updatePlayIcon();
+openShared();
+requestAnimationFrame(tick);
+})();
+</script>
+</body></html>
