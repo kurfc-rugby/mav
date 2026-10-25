@@ -210,7 +210,7 @@ button{cursor:pointer}
 .mrow input{background:transparent;border:1px solid transparent;border-radius:3px;padding:2px 4px;min-width:0;font-size:12px}
 .mrow input:hover,.mrow input:focus{border-color:var(--line);background:var(--bg)}
 .mrow .x{background:none;border:0;color:var(--muted);padding:0 4px;font-size:15px}
-.mrow .sh{background:none;border:1px solid var(--line);border-radius:3px;color:var(--muted);padding:0 5px;font-size:11px}
+.mrow .sh{background:none;border:1px solid var(--line);border-radius:3px;color:var(--muted);padding:0 5px;font-size:11px;white-space:nowrap}
 .mrow .by{display:block;color:var(--muted);font-size:10px;margin-top:1px}
 .mrow .mt small{display:block;color:var(--muted);font-size:10px;font-family:var(--body)}
 .mempty{color:var(--muted);font-size:12px;line-height:1.7;margin:0}
@@ -249,6 +249,22 @@ textarea.copybox{width:100%;height:80px;background:var(--bg);border:1px solid va
 .filters .sep{width:100%;height:0}
 body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
 body.readonly .mrow input{pointer-events:none}
+/* shared memos (みんなのメモ) */
+.notebox{border:1px solid var(--line);border-left:4px solid #e8dcc0;border-radius:4px;padding:8px;display:grid;gap:6px;background:var(--raise)}
+.notebox .nbhead{display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap}
+.notebox .nbhead strong{font-size:13px}
+.notebox .nbhead .nbat{color:var(--muted);font-family:var(--mono)}
+.notebox .nbhead .nbre{color:var(--fg);background:var(--raise2);border-radius:3px;padding:1px 6px}
+.notebox .nbhead button{background:none;border:0;color:var(--muted);font-size:14px;padding:0 4px}
+.notebox .nbrow{display:grid;grid-template-columns:5.5em minmax(0,1fr) auto;gap:6px}
+.notebox input{min-width:0;font-size:13px;padding:6px 7px}
+.notebox .nbsub{font-size:11px;color:var(--muted);margin:0}
+.mrow .chip.cm{--c:#e8dcc0;border-color:#e8dcc0;color:var(--fg)}
+.mrow .ntext{font-size:12px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+.mrow.reply{margin-left:18px;border-left:2px solid var(--line);padding-left:6px}
+.mrow .nx{background:none;border:0;color:var(--muted);padding:0 4px;font-size:15px}
+.marks i.cm{background:#e8dcc0!important;width:2px;opacity:.85}
+@media (pointer:coarse){ .notebox input{font-size:16px} }
 .tags.big button{padding:14px 12px;font-size:16px}
 @media (max-height:700px){ .tags.big button{padding:9px 10px;font-size:15px} }
 .sheetscrim{align-items:end}
@@ -360,7 +376,7 @@ body.theater-on .mbar{display:none!important}
       <p><strong>アプリの中のブラウザで開いています。</strong>動画がうまく再生されないことがあります。右上（または右下）のメニューから「ブラウザで開く」「Chromeで開く」「Safariで開く」を選んでください。</p>
       <button class="btn" id="inappClose">このまま使う</button>
     </div>
-    <div class="banner" id="robar" hidden><p><strong>閲覧用のリンクです。</strong>タグの追加・メモの書き換え・削除はできません（見る・場面に飛ぶ・連続再生はできます）。</p></div>
+    <div class="banner" id="robar" hidden><p><strong>閲覧用のリンクです。</strong>タグの追加・書き換え・削除はできませんが、「みんなのメモ」は誰でも書き込めます（右の「タグ」の一番上。スマホは下の「＋メモ」）。</p></div>
     <div class="banner" id="tapbar" hidden><p><strong>▶ 下の映像をタップすると再生が始まります。</strong>スマホでは最初の1回だけ必要です（映像のどこを押しても大丈夫です）。</p></div>
     <div class="banner" id="syncbar" hidden></div>
     <div class="banner" id="reelbar" hidden>
@@ -434,6 +450,11 @@ body.theater-on .mbar{display:none!important}
       <button data-tab="help" role="tab">使い方</button>
     </div>
     <div class="pane" data-pane="tags">
+      <div class="notebox" id="notebox" hidden>
+        <div class="nbhead"><strong>みんなのメモ</strong><span class="nbat" id="nbAt"></span><span class="nbre" id="nbRe" hidden></span><button id="nbReCancel" hidden aria-label="返信をやめる">×</button></div>
+        <div class="nbrow"><input id="nbName" maxlength="20" placeholder="名前" aria-label="名前"><input id="nbText" maxlength="500" placeholder="この場面へのメモ" aria-label="メモ" enterkeyhint="send"><button class="btn sm pri" id="nbSend">書く</button></div>
+        <p class="nbsub" id="nbSub">このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。</p>
+      </div>
       <div class="tags" id="tags"></div>
       <div class="filters" id="filters"></div>
       <div class="reelrow">
@@ -529,6 +550,7 @@ body.theater-on .mbar{display:none!important}
   <button class="btn" id="mBack">↺ 5秒</button>
   <button class="btn" id="mBig">全画面</button>
   <button class="btn pri" id="mTag">＋タグ</button>
+  <button class="btn pri" id="mMemo" hidden>＋メモ</button>
 </nav>
 <div class="toast" id="toast" role="status"></div>
 
@@ -575,6 +597,8 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
 const prefs = Object.assign({pre: 3, post: 5, tab: null, split: 72, layout: null, custom: {}, light: null}, store.get('mav:prefs', {}));
+// this device's id: lets you delete only the shared memos you wrote yourself
+if (!/^[\w-]{8,40}$/.test(prefs.me || '')) { prefs.me = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); try { localStorage.setItem('mav:prefs', JSON.stringify(prefs)); } catch (e) {} }
 const savePrefs = () => store.set('mav:prefs', prefs);
 function fmt(t, dec = true) {
   if (!isFinite(t)) t = 0;
@@ -613,6 +637,7 @@ const S = {
   title: '', jump: null, readOnly: false, sideFilter: '', theater: false, theaterAuto: false,
   angles: [], main: 0, layout: prefs.layout || (PHONE ? 'single' : 'focus'), playing: false, t: 0, rate: 1, muted: PHONE, forceMute: false,
   sync: false, markers: [], syncBackup: null, reel: null, filter: 'all', shared: false,
+  linkId: '', board: '', notes: [], reply: null, noteT: null,
   light: prefs.light == null ? PHONE : prefs.light, holdAt: 0, stalls: [], stallHinted: false
 };
 let UID = 0, ZTOP = 1;
@@ -741,7 +766,7 @@ function save() {
   const L = loaded(); if (!L.length) return;
   const offs = {}, labels = {};
   L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; });
-  store.set('mav:' + setKey(), {offs, labels, markers: S.markers, title: S.title || ''});
+  store.set('mav:' + setKey(), {offs, labels, markers: S.markers, title: S.title || '', linkId: S.linkId || '', board: S.board || ''});
   saveLast();
 }
 function saveLast() {
@@ -763,6 +788,7 @@ function restore() {
     else { const have = new Set(S.markers.map(m => m.id)); d.markers.forEach(m => { if (!have.has(m.id)) S.markers.push(m); }); S.markers.sort((x, y) => x.t - y.t); }
   }
   if (!S.title && d.title) { S.title = d.title; $('#matchTitle').value = d.title; }
+  if (!S.board && d.board && d.linkId) { S.linkId = d.linkId; S.board = d.board; startNotes(); }
   return true;
 }
 
@@ -1401,7 +1427,7 @@ function jumpTo(m) {
   if (!S.playing) play();
 }
 function startReel() {
-  const list = visibleMarkers();
+  const list = S.filter === 'notes' ? S.notes.map(n => ({t: n.t, cam: n.cam, tag: 'memo', note: `${n.by}：${n.text}`})) : visibleMarkers();
   if (!list.length) { toast('連続再生するタグがありません'); return; }
   if (S.sync) cancelSync();
   S.reel = {list: [...list], idx: 0, end: 0};
@@ -1423,30 +1449,59 @@ function renderReel() {
   $('#reelText').innerHTML = `<strong>連続再生中</strong>　${S.reel.idx + 1} / ${S.reel.list.length}　${esc(tag.name)}${sideBadge(m)} ${fmt(m.t)}${m.note ? '　' + esc(m.note) : ''}`;
 }
 let rowById = {};
+function noteRow(n, isReply) {
+  const row = document.createElement('div'); row.className = 'mrow' + (isReply ? ' reply' : '');
+  row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto';
+  const cam = n.cam != null && S.angles[n.cam] ? `<span class="cam">CAM${n.cam + 1}</span>` : '';
+  const parent = isReply ? null : n.re && (S.markers.find(m => m.id === n.re) || S.notes.find(x => x.id === n.re));
+  const ctx = parent ? `<span class="by">↳ ${parent.tag ? esc(tagOf(parent.tag).name) + ' ' : ''}${fmt(parent.t, false)} へ</span>` : '';
+  row.innerHTML = `<button class="mt" title="この場面へ">${fmt(n.t)}<small>${esc(n.by)}</small></button><span class="chip cm">みんな${cam}</span>
+    <div><div class="ntext">${esc(n.text)}</div>${ctx}</div><button class="sh" title="このメモに返信">返信</button>${n.mine ? '<button class="nx" aria-label="自分のメモを消す" title="自分のメモを消す">×</button>' : '<span></span>'}`;
+  row.querySelector('.mt').addEventListener('click', () => { stopReel(); jumpTo(n); });
+  row.querySelector('.sh').addEventListener('click', () => replyTo(n));
+  const x = row.querySelector('.nx'); if (x) x.addEventListener('click', () => deleteNote(n));
+  return row;
+}
 function renderMarkers() {
   const list = $('#mlist'); list.innerHTML = ''; rowById = {};
-  $('#tagCnt').textContent = S.markers.length;
+  $('#tagCnt').textContent = S.markers.length + S.notes.length;
+  if (S.filter === 'notes') {
+    if (!S.notes.length) list.innerHTML = '<p class="mempty">みんなのメモはまだありません。</p>';
+    S.notes.forEach(n => list.appendChild(noteRow(n, false)));
+    renderFilters(); paintMarks(); return;
+  }
   const vis = visibleMarkers();
-  if (!vis.length) {
+  // a memo written as a reply sits right under the tag (or memo) it answers
+  const kids = {}, ids = new Set(S.markers.map(m => m.id));
+  S.notes.forEach(n => { if (n.re && (ids.has(n.re) || S.notes.some(x => x.id === n.re && !x.re))) (kids[n.re] = kids[n.re] || []).push(n); });
+  const loose = S.filter === 'all' && !S.sideFilter ? S.notes.filter(n => !n.re || !kids[n.re] || !kids[n.re].includes(n)) : [];
+  const items = [...vis.map(m => ({m})), ...loose.map(n => ({n}))].sort((a, b) => (a.m || a.n).t - (b.m || b.n).t);
+  const addKids = id => (kids[id] || []).forEach(n => list.appendChild(noteRow(n, true)));
+  if (!vis.length && !loose.length) {
     list.innerHTML = S.markers.length
       ? '<p class="mempty">この種類のタグはまだありません。</p>'
       : S.readOnly ? '<p class="mempty">タグはありません。</p>'
       : '<p class="mempty">再生中に上のボタンを押すと、その瞬間にタグが付きます。左の列が自チーム、右の列が相手のプレー（ペナルティは反則をしたチーム）。一覧の時刻を押すと、その場面の少し前から再生します。</p>';
   }
-  vis.forEach(m => {
+  items.forEach(it => {
+    if (it.n) { list.appendChild(noteRow(it.n, false)); addKids(it.n.id); return; }
+    const m = it.m;
     const tag = tagOf(m.tag);
     const cam = m.cam != null && S.angles[m.cam] ? `<span class="cam">CAM${m.cam + 1}</span>` : '';
     const row = document.createElement('div'); row.className = 'mrow';
     row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto';
     row.innerHTML = `<button class="mt" title="この場面へ">${fmt(m.t)}</button><span class="chip" style="--c:${tag.c};border-color:${tag.c}">${tag.name}${sideBadge(m)}${cam}</span>
-      <div><input placeholder="メモ" aria-label="メモ" style="width:100%">${m.by ? `<span class="by">${esc(m.by)}</span>` : ''}</div><button class="sh" title="この場面から開く共有リンクをコピー">共有</button><button class="x" aria-label="削除" title="削除">×</button>`;
+      <div><input placeholder="メモ" aria-label="メモ" style="width:100%">${m.by ? `<span class="by">${esc(m.by)}</span>` : ''}</div><button class="sh" title="この場面から開く共有リンクをコピー">共有</button>${S.board ? '<button class="sh rp" title="このタグにみんなのメモで返信">返信</button>' : ''}<button class="x" aria-label="削除" title="削除">×</button>`;
+    if (S.board) row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto auto';
     row.querySelector('.sh').addEventListener('click', () => shareTag(m));
+    if (S.board) row.querySelector('.rp').addEventListener('click', () => replyTo(m));
     const inp = row.querySelector('input'); inp.value = m.note || '';
     if (S.readOnly) { inp.readOnly = true; if (!m.note) inp.placeholder = ''; }
     inp.addEventListener('input', () => { m.note = inp.value; save(); });
     row.querySelector('.mt').addEventListener('click', () => { stopReel(); jumpTo(m); });
     row.querySelector('.x').addEventListener('click', () => { S.markers = S.markers.filter(x => x !== m); renderMarkers(); save(); });
     list.appendChild(row); rowById[m.id] = row;
+    addKids(m.id);
   });
   renderFilters(); paintMarks();
 }
@@ -1464,16 +1519,17 @@ function renderFilters() {
     const br = document.createElement('span'); br.className = 'sep'; box.appendChild(br);
   }
   const counts = {}; S.markers.forEach(m => counts[m.tag] = (counts[m.tag] || 0) + 1);
-  [{k: 'all', name: 'すべて', c: ''}, ...TAGS].forEach(t => {
+  if (S.notes.length) counts.notes = S.notes.length;
+  [{k: 'all', name: 'すべて', c: ''}, ...TAGS, {k: 'notes', name: 'みんなのメモ', c: '#e8dcc0'}].forEach(t => {
     if (t.k !== 'all' && !counts[t.k]) return;
     const b = document.createElement('button');
-    b.textContent = `${t.name} ${t.k === 'all' ? S.markers.length : counts[t.k]}`;
+    b.textContent = `${t.name} ${t.k === 'all' ? S.markers.length + S.notes.length : counts[t.k]}`;
     if (t.c) b.style.setProperty('--c', t.c);
     b.classList.toggle('on', S.filter === t.k);
     b.addEventListener('click', () => { S.filter = t.k; renderMarkers(); });
     box.appendChild(b);
   });
-  box.hidden = !S.markers.length;
+  box.hidden = !S.markers.length && !S.notes.length;
 }
 function paintMarks() {
   const [a0, a1] = range(), span = a1 - a0, box = $('#marks'), box2 = $('#tMarks'); box.innerHTML = ''; box2.innerHTML = '';
@@ -1484,10 +1540,12 @@ function paintMarks() {
     box.appendChild(i);
     const j = document.createElement('s'); j.style.left = i.style.left; j.style.background = tagOf(m.tag).c; if (m.side) j.className = m.side; box2.appendChild(j);
   });
+  S.notes.forEach(n => { const i = document.createElement('i'); i.className = 'cm'; i.style.left = ((n.t - a0) / span * 100) + '%'; box.appendChild(i); });
 }
 $('#copyMarks').addEventListener('click', () => {
-  if (!S.markers.length) { toast('タグがまだありません'); return; }
-  const text = S.markers.map(m => `${fmt(m.t)}\t${tagOf(m.tag).name}${sideText(m)}\t${m.cam != null && S.angles[m.cam] ? 'CAM' + (m.cam + 1) + ' ' + S.angles[m.cam].label : ''}\t${m.note || ''}`).join('\n');
+  if (!S.markers.length && !S.notes.length) { toast('タグがまだありません'); return; }
+  const text = S.markers.map(m => `${fmt(m.t)}\t${tagOf(m.tag).name}${sideText(m)}\t${m.cam != null && S.angles[m.cam] ? 'CAM' + (m.cam + 1) + ' ' + S.angles[m.cam].label : ''}\t${m.note || ''}`)
+    .concat(S.notes.map(n => `${fmt(n.t)}\tみんなのメモ\t${n.by}\t${n.text}`)).join('\n');
   copyText(text, 'タグ一覧をコピーしました');
 });
 function copyText(text, okMsg) {
@@ -1539,13 +1597,18 @@ async function decodeShare(str) {
 const shortCache = {};
 async function shorten(data) {
   if (!SHORT_API) return null;
-  if (shortCache[data]) return shortCache[data];
+  if (shortCache[data]) return shortCache[data].k;
   const ctl = window.AbortController ? new AbortController() : null;
   const tm = setTimeout(() => ctl && ctl.abort(), 9000);
   try {
-    const r = await fetch(SHORT_API, {method: 'POST', body: data, signal: ctl ? ctl.signal : undefined});
+    // "from": a link made again from the same analysis keeps using the same memo board
+    const r = await fetch(SHORT_API, {method: 'POST', body: JSON.stringify({op: 'save', d: data, from: S.linkId || ''}), signal: ctl ? ctl.signal : undefined});
     const j = await r.json();
-    if (j && j.k) return (shortCache[data] = j.k);
+    if (j && j.k) {
+      shortCache[data] = j;
+      if (!S.readOnly) { const first = !S.board; S.linkId = j.k; S.board = j.b || j.k; save(); if (first) startNotes(); }
+      return j.k;
+    }
   } catch (e) {} finally { clearTimeout(tm); }
   return null;
 }
@@ -1554,12 +1617,17 @@ async function buildShareUrl(jump) {
     s: S.angles.map(a => a.kind === 'yt' ? ['y', a.ytid, a.label, +a.off.toFixed(3)] : a.kind === 'file' ? ['f', a.name, a.label, +a.off.toFixed(3)] : 0),
     m: S.markers.map(m => [+m.t.toFixed(2), m.tag, m.note || '', m.cam == null ? -1 : m.cam, m.id, m.by || '', m.side || ''])};
   if (S.readOnly || !prefs.shareEdit) obj.ro = 1; // view-only: whoever opens it can't add, edit or delete tags
-  if (jump) obj.j = [+jump.t.toFixed(2), jump.cam == null ? -1 : jump.cam];
+  const j = jump ? [+jump.t.toFixed(2), jump.cam == null ? -1 : jump.cam] : null;
   const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : PAGES_URL;
   // openExternalBrowser=1: when tapped in LINE, it opens in the phone's normal browser instead of LINE's own
-  const data = await encodeShare(obj);
-  const k = await shorten(data); // falls back to the long link when offline or the short-link service fails
-  return base + '?openExternalBrowser=1#' + (k ? 'k=' + k : 's=' + data);
+  const pre = base + '?openExternalBrowser=1#', jq = j ? `&j=${j[0]},${j[1]}` : '';
+  // a view-only link can't change what it shows, so its scene links reuse the same short link (and memo board)
+  if (S.readOnly && S.linkId) return pre + 'k=' + S.linkId + jq;
+  // the scene to open goes after the short id, so every scene link of one analysis shares one short link
+  const k = await shorten(await encodeShare(obj)); // falls back to the long link when offline or the short-link service fails
+  if (k) return pre + 'k=' + k + jq;
+  if (j) obj.j = j;
+  return pre + 's=' + await encodeShare(obj);
 }
 // copy text that is still being prepared (e.g. waiting for the short link) without losing the tap that asked for it
 function copyLater(p, okMsg) {
@@ -1597,6 +1665,7 @@ async function refreshShareNow() {
     `アングル${S.angles.filter(a => a.kind).length}本・タグ${S.markers.length}件${S.markers.length ? '（' + tagSummary() + '）' : ''}`,
     here ? `${fmt(S.t, false)} の場面から開きます` : '',
     (S.readOnly || !prefs.shareEdit) ? '（見るだけのリンクです）' : '',
+    /#k=/.test(shareUrl) ? '開いた人はみんな「みんなのメモ」に書き込めます' : '',
     files ? '※パソコンの動画ファイルは入っていないので、各自で同じファイルを選んでください' : ''
   ].filter(Boolean).join('\n');
   save();
@@ -1638,7 +1707,7 @@ function applyPlan(slots, markers) {
   if (slots.some(p => p && p.k === 'f')) setTab('angles');
 }
 async function openShared() {
-  const m = location.hash.match(/^#s=([\w-]+)$/), mk = location.hash.match(/^#k=([A-Za-z0-9]{4,12})$/);
+  const m = location.hash.match(/^#s=([\w-]+)$/), mk = location.hash.match(/^#k=([A-Za-z0-9]{4,12})(?:&j=(-?[\d.]+),(-?\d+))?$/);
   if (!m && !mk) return false;
   S.shared = true;
   try {
@@ -1646,9 +1715,9 @@ async function openShared() {
     if (mk) {
       if (!SHORT_API) throw new Error('no api');
       toast('共有された分析を読み込み中…', 4000);
-      const j = await (await fetch(SHORT_API + '?k=' + mk[1])).json();
+      const j = await (await fetch(SHORT_API + '?k=' + mk[1] + '&o=' + prefs.me)).json();
       if (!j || !j.d) { S.shared = false; toast('このリンクの分析が見つかりませんでした', 4000); return false; }
-      str = j.d;
+      str = j.d; S.linkId = mk[1]; S.board = j.b || mk[1]; setNotes(j.notes);
     }
     const d = await decodeShare(str);
     const slots = (d.s || []).map(x => x ? {k: x[0], id: x[0] === 'y' ? x[1] : null, name: x[0] === 'f' ? x[1] : null, label: x[2], off: x[3]} : null);
@@ -1658,10 +1727,13 @@ async function openShared() {
     S.shared = true;
     if (d.ro) { S.readOnly = true; document.body.classList.add('readonly'); $('#robar').hidden = false; setTab('tags'); }
     if (d.n) { S.title = d.n; $('#matchTitle').value = d.n; }
-    if (d.j) S.jump = {t: d.j[0], cam: d.j[1] < 0 || map[d.j[1]] == null ? null : map[d.j[1]]};
+    const jj = mk && mk[2] != null ? [+mk[2], +mk[3]] : d.j;
+    if (jj) S.jump = {t: jj[0], cam: jj[1] < 0 || map[jj[1]] == null ? null : map[jj[1]]};
     applyPlan(slots, markers);
     toast('共有された分析を開きました', 2500);
-    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    // keep the short link in the address bar: it is the page everyone writes memos on
+    try { history.replaceState(null, '', location.pathname + (mk ? '#k=' + mk[1] : '')); } catch (e) {}
+    if (mk) startNotes();
     return true;
   } catch (e) { S.shared = false; toast(mk ? '共有リンクを読み込めませんでした。電波の良い所でもう一度開いてください' : '共有リンクを読み取れませんでした', 4000); return false; }
 }
@@ -1669,6 +1741,92 @@ $('#resumeBtn').addEventListener('click', () => {
   const lastS = store.get('mav:last', null); if (!lastS) return;
   applyPlan(lastS.slots.filter(Boolean).map(s => ({k: s.k, id: s.id, name: s.name, label: s.label})), null);
   if (lastS.slots.some(s => s && s.k === 'f')) toast('パソコンの動画は、枠に表示されたファイルを選び直してください（まとめて選べます）', 4000);
+});
+
+/* ---------- みんなのメモ (shared memos on one short link) ---------- */
+let notesTimer = 0, notesBusy = false;
+function setNotes(list) {
+  if (!Array.isArray(list)) return;
+  S.notes = list.map(n => ({...n, cam: n.cam == null || n.cam < 0 ? null : n.cam})).sort((a, b) => a.t - b.t || a.at - b.at);
+  renderMarkers();
+}
+async function pullNotes() {
+  if (!S.board || !SHORT_API || notesBusy || document.hidden) return;
+  notesBusy = true;
+  try { const j = await (await fetch(SHORT_API + '?b=' + S.board + '&o=' + prefs.me)).json(); if (j && j.notes) setNotes(j.notes); }
+  catch (e) {} finally { notesBusy = false; }
+}
+function startNotes() {
+  renderNotebox();
+  clearInterval(notesTimer);
+  if (!S.board) return;
+  notesTimer = setInterval(pullNotes, 25000); // others' memos show up within about half a minute
+  pullNotes();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pullNotes(); });
+function renderNotebox() {
+  const on = !!S.board && !IS_FILE;
+  $('#notebox').hidden = !on;
+  $('#mMemo').hidden = !(on && S.readOnly);
+  if (!on) return;
+  if (!$('#nbName').value) $('#nbName').value = prefs.name || '';
+  const t = S.reply ? S.reply.t : (S.noteT != null ? S.noteT : S.t);
+  $('#nbAt').textContent = S.reply ? '' : fmt(t, false) + ' の場面';
+  $('#nbRe').hidden = $('#nbReCancel').hidden = !S.reply;
+  if (S.reply) $('#nbRe').textContent = `↳ ${S.reply.tag ? tagOf(S.reply.tag).name + ' ' : (S.reply.by ? S.reply.by + 'さん ' : '')}${fmt(S.reply.t, false)} へ返信`;
+}
+function replyTo(item) {
+  // a reply to a reply hangs under the same first item
+  const root = item.re ? (S.markers.find(m => m.id === item.re) || S.notes.find(n => n.id === item.re) || item) : item;
+  S.reply = {id: root.id, t: root.t, cam: root.cam, tag: root.tag || '', by: root.by || ''};
+  setTab('tags'); renderNotebox(); $('#nbText').focus();
+  $('#notebox').scrollIntoView({block: 'nearest'});
+}
+function clearReply() { S.reply = null; S.noteT = null; renderNotebox(); }
+$('#nbReCancel').addEventListener('click', clearReply);
+// the memo belongs to the moment you started writing it, even if the video keeps playing
+$('#nbText').addEventListener('focus', () => { if (!S.reply && S.noteT == null) { S.noteT = S.t; renderNotebox(); } });
+$('#nbText').addEventListener('blur', () => { if (!$('#nbText').value.trim() && !S.reply) setTimeout(() => { if (document.activeElement !== $('#nbText')) { S.noteT = null; renderNotebox(); } }, 200); });
+$('#nbName').addEventListener('input', e => { prefs.name = e.target.value.trim(); savePrefs(); });
+async function sendNote() {
+  const text = $('#nbText').value.trim(), by = $('#nbName').value.trim();
+  if (!text) { $('#nbText').focus(); return; }
+  if (!by) { toast('名前を入れてください（メモに表示されます）'); $('#nbName').focus(); return; }
+  if (!S.board) return;
+  prefs.name = by; savePrefs();
+  const r = S.reply, t = r ? r.t : (S.noteT != null ? S.noteT : S.t);
+  const body = {op: 'note', b: S.board, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: +t.toFixed(2),
+    cam: r ? (r.cam == null ? -1 : r.cam) : S.main, text, by, re: r ? r.id : '', own: prefs.me};
+  $('#nbSend').disabled = true; $('#nbSub').textContent = '書き込み中…';
+  try {
+    const j = await (await fetch(SHORT_API, {method: 'POST', body: JSON.stringify(body)})).json();
+    if (!j || !j.ok) throw new Error(j && j.error);
+    $('#nbText').value = ''; clearReply();
+    setNotes([...S.notes.filter(n => n.id !== j.note.id), j.note]);
+    toast('メモを書き込みました（みんなに見えます）', 1800);
+  } catch (e) { toast(e && e.message === 'full' ? 'このリンクのメモがいっぱいです' : '書き込めませんでした。電波の良い所でもう一度押してください', 3500); }
+  finally { $('#nbSend').disabled = false; $('#nbSub').textContent = 'このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。'; }
+}
+$('#nbSend').addEventListener('click', sendNote);
+$('#nbText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); sendNote(); } });
+async function deleteNote(n) {
+  if (!confirmDel(n)) return;
+  try {
+    const j = await (await fetch(SHORT_API, {method: 'POST', body: JSON.stringify({op: 'del', b: S.board, id: n.id, own: prefs.me})})).json();
+    if (!j || !j.ok) throw 0;
+    setNotes(S.notes.filter(x => x.id !== n.id)); toast('メモを消しました', 1500);
+  } catch (e) { toast('消せませんでした。もう一度押してください', 3000); }
+}
+// a second tap within 3 seconds confirms (no browser dialog)
+let delArm = '';
+function confirmDel(n) {
+  if (delArm === n.id) { delArm = ''; return true; }
+  delArm = n.id; toast('もう一度 × を押すと消します', 2500); setTimeout(() => { if (delArm === n.id) delArm = ''; }, 3000);
+  return false;
+}
+setInterval(() => { if (S.board && !S.reply && S.noteT == null && !$('#notebox').hidden) $('#nbAt').textContent = fmt(S.t, false) + ' の場面'; }, 1000);
+$('#mMemo').addEventListener('click', () => {
+  setTab('tags'); $('#notebox').scrollIntoView({block: 'center'}); $('#nbText').focus();
 });
 
 /* ---------- YouTube add dialog ---------- */
