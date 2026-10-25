@@ -1764,6 +1764,8 @@ function startNotes() {
   pullNotes();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pullNotes(); });
+// tapping another shared link while this page is open only changes the part after #, so open it properly
+window.addEventListener('hashchange', () => { if (/^#[ks]=/.test(location.hash)) location.reload(); });
 function renderNotebox() {
   const on = !!S.board && !IS_FILE;
   $('#notebox').hidden = !on;
