@@ -77,7 +77,20 @@ function saveLink_(d, from) {
     const sh = sheet_();
     const fp = md5_(d);
     const same = find_(sh, 3, fp);                     // 同じ内容なら同じIDを返す
-    if (same) { const k = String(sh.getRange(same, 1).getValue()); return {k: k, b: boardOf_(k)}; }
+    if (same) {
+      const k = String(sh.getRange(same, 1).getValue());
+      let b = boardOf_(k);
+      // 同じ内容のリンクが前からあっても、まだメモの無いリンクなら from と同じメモ帳にそろえる
+      if (ID_RE.test(from || '') && from !== k && b === k && find_(sh, 1, from)) {
+        const fb = boardOf_(from);
+        if (fb !== k && !allNotes_(k).length) {
+          const bs = boards_(), row = find_(bs, 1, k);
+          if (row) bs.getRange(row, 2).setValue(txt_(fb)); else bs.appendRow([txt_(k), txt_(fb)]);
+          b = fb;
+        }
+      }
+      return {k: k, b: b};
+    }
     let id;
     do { id = newId_(); } while (find_(sh, 1, id));
     const parts = [];
