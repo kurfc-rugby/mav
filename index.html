@@ -317,6 +317,7 @@ body.theater-on .mbar{display:none!important}
 .tctl .prog s{position:absolute;top:6px;width:3px;height:12px;margin-left:-1px;border-radius:1px;text-decoration:none}
 .tctl .prog s.us{top:2px;height:8px}
 .tctl .prog s.op{top:14px;height:8px}
+.tctl .prog s.cm{background:#e8dcc0;width:2px;opacity:.85}
 .tctl .row{display:flex;gap:8px;align-items:center}
 .tctl button,.tclose{min-height:44px;min-width:44px;background:#000a;border:1px solid #fff4;border-radius:22px;color:#fff;padding:0 14px;font-size:14px;white-space:nowrap}
 .tctl .tplay{width:52px;padding:0;display:grid;place-items:center}
@@ -330,6 +331,13 @@ body.theater-on .mbar{display:none!important}
 .tctl .cams button.on b{background:var(--tally)}
 .tctl .tt{font-family:var(--mono);color:#fff;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tctl .ttag{background:var(--enji);border-color:var(--enji-hi)}
+.tctl .row .ttag + .ttag{margin-left:6px}
+.msrow{display:grid;grid-template-columns:6em minmax(0,1fr);gap:8px}
+.msrow input{min-width:0;font-size:16px;padding:8px}
+#memoSheet .row{justify-content:flex-end}
+/* at the top of the screen, so the phone keyboard (which comes up from the bottom) doesn't cover it */
+#memoSheet{align-items:start}
+#memoSheet .pop{border-radius:8px;padding-bottom:18px}
 @media (max-width:420px){ .tctl .cams button{justify-content:center;padding:0 4px} }
 .mbar{display:none}
 @media (max-width:900px){
@@ -416,6 +424,7 @@ body.theater-on .mbar{display:none!important}
       <div class="row">
         <span class="tt" id="tTime">0:00</span>
         <span class="grow"></span>
+        <button class="ttag" id="tMemo" hidden>＋メモ</button>
         <button class="ttag" id="tTag">＋タグ</button>
       </div>
     </div>
@@ -545,6 +554,13 @@ body.theater-on .mbar{display:none!important}
     <p>下の文をLINEなどに貼ると、受け取った人はリンクを開くだけで同じ動画・ズレ・タグで見られます。受け取った人がタグを足して送り返すと、あなたのタグと合わさります。</p>
     <textarea class="shtext" id="shText" readonly aria-label="送る文"></textarea>
     <div class="row"><button class="btn" id="shClose">閉じる</button><button class="btn" id="shCopyUrl">リンクだけコピー</button><button class="btn pri" id="shCopyText">この文をコピー</button></div>
+  </div>
+</div>
+<div class="scrim sheetscrim" id="memoSheet" hidden>
+  <div class="pop sheet" role="dialog" aria-labelledby="memoSheetTitle">
+    <h2 id="memoSheetTitle">みんなのメモ <span id="memoSheetTime" class="sub"></span></h2>
+    <div class="msrow"><input id="msName" maxlength="20" placeholder="名前" aria-label="名前"><input id="msText" maxlength="500" placeholder="この場面へのメモ" aria-label="メモ" enterkeyhint="send"></div>
+    <div class="row"><button class="btn" id="msClose">閉じる</button><button class="btn pri" id="msSend">書く</button></div>
   </div>
 </div>
 <div class="scrim sheetscrim" id="tagSheet" hidden>
@@ -1563,7 +1579,10 @@ function paintMarks() {
     box.appendChild(i);
     const j = document.createElement('s'); j.style.left = i.style.left; j.style.background = tagOf(m.tag).c; if (m.side) j.className = m.side; box2.appendChild(j);
   });
-  S.notes.forEach(n => { const i = document.createElement('i'); i.className = 'cm'; i.style.left = ((n.t - a0) / span * 100) + '%'; box.appendChild(i); });
+  S.notes.forEach(n => {
+    const i = document.createElement('i'); i.className = 'cm'; i.style.left = ((n.t - a0) / span * 100) + '%'; box.appendChild(i);
+    const j = document.createElement('s'); j.className = 'cm'; j.style.left = i.style.left; box2.appendChild(j);
+  });
 }
 $('#copyMarks').addEventListener('click', () => {
   if (!S.markers.length && !S.notes.length) { toast('タグがまだありません'); return; }
@@ -1793,6 +1812,7 @@ function renderNotebox() {
   const on = !!S.board && !IS_FILE;
   $('#notebox').hidden = !on;
   $('#mMemo').hidden = !(on && S.readOnly);
+  $('#tMemo').hidden = !on;
   if (!on) return;
   if (!$('#nbName').value) $('#nbName').value = prefs.name || '';
   const t = S.reply ? S.reply.t : (S.noteT != null ? S.noteT : S.t);
@@ -1813,25 +1833,61 @@ $('#nbReCancel').addEventListener('click', clearReply);
 $('#nbText').addEventListener('focus', () => { if (!S.reply && S.noteT == null) { S.noteT = S.t; renderNotebox(); } });
 $('#nbText').addEventListener('blur', () => { if (!$('#nbText').value.trim() && !S.reply) setTimeout(() => { if (document.activeElement !== $('#nbText')) { S.noteT = null; renderNotebox(); } }, 200); });
 $('#nbName').addEventListener('input', e => { prefs.name = e.target.value.trim(); savePrefs(); });
+async function postNote(text, by, t, cam, re) {
+  prefs.name = by; savePrefs(); $('#nbName').value = by;
+  const body = {op: 'note', b: S.board, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: +t.toFixed(2),
+    cam: cam == null ? -1 : cam, text, by, re: re || '', own: prefs.me};
+  try {
+    const j = await (await fetch(SHORT_API, {method: 'POST', body: JSON.stringify(body)})).json();
+    if (!j || !j.ok) throw new Error(j && j.error);
+    setNotes([...S.notes.filter(n => n.id !== j.note.id), j.note]);
+    toast('メモを書き込みました（みんなに見えます）', 1800);
+    return true;
+  } catch (e) { toast(e && e.message === 'full' ? 'このリンクのメモがいっぱいです' : '書き込めませんでした。電波の良い所でもう一度押してください', 3500); return false; }
+}
 async function sendNote() {
   const text = $('#nbText').value.trim(), by = $('#nbName').value.trim();
   if (!text) { $('#nbText').focus(); return; }
   if (!by) { toast('名前を入れてください（メモに表示されます）'); $('#nbName').focus(); return; }
   if (!S.board) return;
-  prefs.name = by; savePrefs();
   const r = S.reply, t = r ? r.t : (S.noteT != null ? S.noteT : S.t);
-  const body = {op: 'note', b: S.board, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: +t.toFixed(2),
-    cam: r ? (r.cam == null ? -1 : r.cam) : S.main, text, by, re: r ? r.id : '', own: prefs.me};
   $('#nbSend').disabled = true; $('#nbSub').textContent = '書き込み中…';
-  try {
-    const j = await (await fetch(SHORT_API, {method: 'POST', body: JSON.stringify(body)})).json();
-    if (!j || !j.ok) throw new Error(j && j.error);
-    $('#nbText').value = ''; clearReply();
-    setNotes([...S.notes.filter(n => n.id !== j.note.id), j.note]);
-    toast('メモを書き込みました（みんなに見えます）', 1800);
-  } catch (e) { toast(e && e.message === 'full' ? 'このリンクのメモがいっぱいです' : '書き込めませんでした。電波の良い所でもう一度押してください', 3500); }
-  finally { $('#nbSend').disabled = false; $('#nbSub').textContent = 'このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。'; }
+  const ok = await postNote(text, by, t, r ? r.cam : S.main, r ? r.id : '');
+  if (ok) { $('#nbText').value = ''; clearReply(); }
+  $('#nbSend').disabled = false; $('#nbSub').textContent = 'このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。';
 }
+/* full screen: a small sheet over the video; the video waits while you write */
+let msT = 0, msResume = false;
+function openMemoSheet() {
+  if (!S.board) { toast('みんなのメモは、短縮リンクで開いたときに使えます'); return; }
+  msT = S.t; msResume = S.playing; if (S.playing) pause();
+  $('#memoSheetTime').textContent = fmt(msT, false) + ' の場面';
+  $('#msName').value = prefs.name || ''; $('#msText').value = '';
+  $('#memoSheet').hidden = false;
+  setTimeout(() => (prefs.name ? $('#msText') : $('#msName')).focus(), 50);
+}
+function closeMemoSheet() {
+  if ($('#memoSheet').hidden) return;
+  $('#memoSheet').hidden = true;
+  if (msResume) play();
+  msResume = false; if (S.theater) poke();
+}
+async function sendMemoSheet() {
+  const text = $('#msText').value.trim(), by = $('#msName').value.trim();
+  if (!by) { toast('名前を入れてください（メモに表示されます）'); $('#msName').focus(); return; }
+  if (!text) { $('#msText').focus(); return; }
+  $('#msSend').disabled = true; $('#msSend').textContent = '書き込み中…';
+  const ok = await postNote(text, by, msT, S.main, '');
+  $('#msSend').disabled = false; $('#msSend').textContent = '書く';
+  if (ok) closeMemoSheet();
+}
+$('#tMemo').addEventListener('click', () => { openMemoSheet(); });
+$('#msClose').addEventListener('click', closeMemoSheet);
+$('#msSend').addEventListener('click', sendMemoSheet);
+$('#memoSheet').addEventListener('click', e => { if (e.target.id === 'memoSheet') closeMemoSheet(); });
+['msName', 'msText'].forEach(id => $('#' + id).addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); id === 'msName' ? $('#msText').focus() : sendMemoSheet(); }
+}));
 $('#nbSend').addEventListener('click', sendNote);
 $('#nbText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); sendNote(); } });
 async function deleteNote(n) {
@@ -2039,7 +2095,7 @@ function updatePlayIcon() {
   $('#mPlay svg').innerHTML = S.playing ? PAUSE_SVG : PLAY_SVG;
   $('#tPlay svg').innerHTML = S.playing ? PAUSE_SVG : PLAY_SVG;
   if (S.theater) poke();
-  $('#play').setAttribute('aria-label', S.playing ? '一時停止' : '再生');
+  ['#play', '#mPlay', '#tPlay'].forEach(q => $(q).setAttribute('aria-label', S.playing ? '一時停止' : '再生'));
 }
 
 /* ---------- timeline ---------- */
@@ -2122,15 +2178,17 @@ document.addEventListener('keydown', e => {
   const t = e.target;
   if (e.key === 'Escape') {
     if (!$('#ytPop').hidden) closeYtPop();
+    else if (!$('#memoSheet').hidden) closeMemoSheet();
     else if (S.theater && $('#tagSheet').hidden) exitTheater();
     else if (!$('#sharePop').hidden) $('#sharePop').hidden = true;
     else if (!$('#tagSheet').hidden) closeTagSheet();
+    else if (!$('#memoSheet').hidden) closeMemoSheet();
     else if (t.matches && t.matches('input,textarea')) t.blur();
     else if (S.reel) stopReel();
     else if (S.sync) cancelSync();
     return;
   }
-  if (!$('#ytPop').hidden || !$('#sharePop').hidden || !$('#tagSheet').hidden) return;
+  if (!$('#ytPop').hidden || !$('#sharePop').hidden || !$('#tagSheet').hidden || !$('#memoSheet').hidden) return;
   if (t.matches && t.matches('input:not([type=range]),textarea,select')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const dm = /^Digit([0-9])$/.exec(e.code);
