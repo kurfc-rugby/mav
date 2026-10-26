@@ -201,16 +201,21 @@ button{cursor:pointer}
 .reelrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .reelrow select{background:var(--raise);border:1px solid var(--line);border-radius:4px;padding:2px 4px}
 .mlist{display:flex;flex-direction:column;gap:1px}
-.mrow{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:6px;align-items:center;padding:3px 4px;border-radius:4px}
+.mrow{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:5px;align-items:center;padding:3px 4px;border-radius:4px}
 .mrow.cur{background:color-mix(in srgb,var(--enji) 30%,transparent)}
 .mrow .mt{font-family:var(--mono);font-size:12px;background:none;border:0;padding:3px 4px;border-radius:3px;color:var(--fg);font-variant-numeric:tabular-nums;text-align:left}
 .mrow .mt:hover{background:var(--raise2)}
-.mrow .chip{font-size:11px;padding:1px 6px;border-radius:2px;border:1px solid var(--c);white-space:nowrap}
+.mrow .chip{font-size:11px;padding:1px 6px;border-radius:2px;border:1px solid var(--c);white-space:nowrap;min-width:0;overflow:hidden;display:inline-flex;align-items:center;justify-self:start;max-width:100%}
+/* in a narrow list the camera number is dropped so 自/相手 and the buttons always fit */
+.mrow .chip .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.mrow .chip .side,.mrow .chip .cam{flex:none}
+.pane[data-pane="tags"]{container-type:inline-size}
+@container (max-width: 330px){ .mrow .chip .cam{display:none} }
 .mrow .cam{font-family:var(--cond);color:var(--muted);font-size:11px;margin-left:4px}
 .mrow input{background:transparent;border:1px solid transparent;border-radius:3px;padding:2px 4px;min-width:0;font-size:12px}
 .mrow input:hover,.mrow input:focus{border-color:var(--line);background:var(--bg)}
 .mrow .x{background:none;border:0;color:var(--muted);padding:0 4px;font-size:15px}
-.mrow .sh{background:none;border:1px solid var(--line);border-radius:3px;color:var(--muted);padding:0 5px;font-size:11px;white-space:nowrap}
+.mrow .sh{background:none;border:1px solid var(--line);border-radius:3px;color:var(--muted);padding:0 4px;font-size:11px;white-space:nowrap}
 .mrow .by{display:block;color:var(--muted);font-size:10px;margin-top:1px}
 .mrow .mt small{display:block;color:var(--muted);font-size:10px;font-family:var(--body)}
 .mempty{color:var(--muted);font-size:12px;line-height:1.7;margin:0}
@@ -254,6 +259,8 @@ body.readonly .arow .offs,body.readonly .arow .acts,body.readonly #offHint,body.
 body.readonly .arow .alabel,body.readonly #matchTitle{pointer-events:none}
 /* shared memos (みんなのメモ) */
 .notebox{border:1px solid var(--line);border-left:4px solid #e8dcc0;border-radius:4px;padding:8px;display:grid;gap:6px;background:var(--raise)}
+/* stays at the top of the tag list while you scroll through it (phones: at the top of the screen) */
+.notebox{position:sticky;top:0;z-index:4;box-shadow:0 -12px 0 var(--panel),0 6px 12px -4px #0009}
 .notebox .nbhead{display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap}
 .notebox .nbhead strong{font-size:13px}
 .notebox .nbhead .nbat{color:var(--muted);font-family:var(--mono)}
@@ -1467,11 +1474,11 @@ function renderReel() {
 let rowById = {};
 function noteRow(n, isReply) {
   const row = document.createElement('div'); row.className = 'mrow' + (isReply ? ' reply' : '');
-  row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto';
+  row.style.gridTemplateColumns = 'auto minmax(0,max-content) minmax(0,1fr) auto auto';
   const cam = n.cam != null && S.angles[n.cam] ? `<span class="cam">CAM${n.cam + 1}</span>` : '';
   const parent = isReply ? null : n.re && (S.markers.find(m => m.id === n.re) || S.notes.find(x => x.id === n.re));
   const ctx = parent ? `<span class="by">↳ ${parent.tag ? esc(tagOf(parent.tag).name) + ' ' : ''}${fmt(parent.t, false)} へ</span>` : '';
-  row.innerHTML = `<button class="mt" title="この場面へ">${fmt(n.t)}<small>${esc(n.by)}</small></button><span class="chip cm">みんな${cam}</span>
+  row.innerHTML = `<button class="mt" title="この場面へ">${fmt(n.t)}<small>${esc(n.by)}</small></button><span class="chip cm"><span class="nm">みんな</span>${cam}</span>
     <div><div class="ntext">${esc(n.text)}</div>${ctx}</div><button class="sh" title="このメモに返信">返信</button>${n.mine ? '<button class="nx" aria-label="自分のメモを消す" title="自分のメモを消す">×</button>' : '<span></span>'}`;
   row.querySelector('.mt').addEventListener('click', () => { stopReel(); jumpTo(n); });
   row.querySelector('.sh').addEventListener('click', () => replyTo(n));
@@ -1505,10 +1512,10 @@ function renderMarkers() {
     const tag = tagOf(m.tag);
     const cam = m.cam != null && S.angles[m.cam] ? `<span class="cam">CAM${m.cam + 1}</span>` : '';
     const row = document.createElement('div'); row.className = 'mrow';
-    row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto';
-    row.innerHTML = `<button class="mt" title="この場面へ">${fmt(m.t)}</button><span class="chip" style="--c:${tag.c};border-color:${tag.c}">${tag.name}${sideBadge(m)}${cam}</span>
+    row.style.gridTemplateColumns = 'auto minmax(0,max-content) minmax(0,1fr) auto auto';
+    row.innerHTML = `<button class="mt" title="この場面へ">${fmt(m.t)}</button><span class="chip" style="--c:${tag.c};border-color:${tag.c}"><span class="nm">${tag.name}</span>${sideBadge(m)}${cam}</span>
       <div><input placeholder="メモ" aria-label="メモ" style="width:100%">${m.by ? `<span class="by">${esc(m.by)}</span>` : ''}</div><button class="sh" title="この場面から開く共有リンクをコピー">共有</button>${S.board ? '<button class="sh rp" title="このタグにみんなのメモで返信">返信</button>' : ''}<button class="x" aria-label="削除" title="削除">×</button>`;
-    if (S.board) row.style.gridTemplateColumns = 'auto auto minmax(0,1fr) auto auto auto';
+    if (S.board) row.style.gridTemplateColumns = 'auto minmax(0,max-content) minmax(0,1fr) auto auto auto';
     row.querySelector('.sh').addEventListener('click', () => shareTag(m));
     if (S.board) row.querySelector('.rp').addEventListener('click', () => replyTo(m));
     const inp = row.querySelector('input'); inp.value = m.note || '';
