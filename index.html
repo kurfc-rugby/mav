@@ -274,6 +274,11 @@ body.readonly .arow .alabel,body.readonly #matchTitle{pointer-events:none}
 .mrow.reply{margin-left:18px;border-left:2px solid var(--line);padding-left:6px}
 .mrow .nx{background:none;border:0;color:var(--muted);padding:0 4px;font-size:15px}
 .marks i.cm{background:#e8dcc0!important;width:2px;opacity:.85}
+.marks i.half{background:repeating-linear-gradient(#fff 0 3px,transparent 3px 6px)!important;width:2px;top:-2px;height:26px}
+.tctl .prog s.half{background:#fff;width:2px;top:2px;height:20px;opacity:.9}
+label.chk{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:var(--muted);line-height:1.5}
+label.chk input{margin-top:3px}
+.tbar .chip2.part{background:var(--enji);border-color:var(--enji-hi)}
 @media (pointer:coarse){ .notebox input{font-size:16px} }
 .tags.big button{padding:14px 12px;font-size:16px}
 @media (max-height:700px){ .tags.big button{padding:9px 10px;font-size:15px} }
@@ -450,6 +455,7 @@ body.theater-on .mbar{display:none!important}
         </ol>
         <div class="row"><button class="btn pri" id="startFile">動画ファイルを選ぶ</button></div>
         <form class="ytform" id="startYt"><input type="text" id="startYtUrl" placeholder="YouTubeのURL（複数ならスペースか改行で区切る）" aria-label="YouTubeのURL"><button class="btn" type="submit">読み込む</button></form>
+        <label class="chk" id="startJoinRow"><input type="checkbox" id="startJoin"> 前半・後半のような続きの動画を、貼った順に1本につなげる</label>
         <span class="hint" id="startHint">動画ファイルはこの枠にドロップできます</span>
       </div>
     </main>
@@ -582,8 +588,9 @@ body.theater-on .mbar{display:none!important}
 <div class="scrim" id="ytPop" hidden>
   <div class="pop" role="dialog" aria-labelledby="ytPopTitle">
     <h2 id="ytPopTitle">YouTubeの動画を追加</h2>
-    <p>URLを1行に1つずつ貼り付けてください。アングルとして順番に追加されます（全部で最大6本）。</p>
+    <p id="ytPopText">URLを1行に1つずつ貼り付けてください。アングルとして順番に追加されます（全部で最大6本）。</p>
     <textarea id="ytText" placeholder="https://youtu.be/...&#10;https://www.youtube.com/watch?v=..."></textarea>
+    <label class="chk" id="ytJoinRow"><input type="checkbox" id="ytJoin"> 前半・後半のように<b>続きの動画</b>なので、貼った順に<b>1本につなげる</b></label>
     <div class="row"><button class="btn" id="ytCancel">やめる</button><button class="btn pri" id="ytOk">追加する</button></div>
   </div>
 </div>
@@ -734,10 +741,36 @@ class FileSrc {
   destroy() { this.v.pause(); this.v.removeAttribute('src'); this.v.load(); }
 }
 class YTSrc {
-  constructor(player) {
+  constructor(player, parts) {
     this.p = player; this.fine = false; this.want = false; this.state = -1;
     this.target = 0; this.lastSeek = -1e9; this.lastFire = -1e9; this.timer = null; this.rate = 1;
     this.good = 0; this.playAt = -1e9; this.seekStart = 0; this.bufMs = 700; this.corr = 0;
+    // parts: [{id, dur, gap}] when the angle is several videos played one after another (前半 → 後半)
+    this.parts = parts && parts.length > 1 ? parts : null; this.cur = 0; this._vdur = 0;
+  }
+  get vdur() { return this.parts ? this.parts[this.cur].dur : this._vdur; }
+  set vdur(x) { this._vdur = x; }
+  // where each part starts on this angle's own timeline (gap = extra seconds between the end of one part and the next)
+  starts() { const s = [0]; for (let i = 1; i < this.parts.length; i++) s.push(s[i - 1] + this.parts[i - 1].dur + (this.parts[i].gap || 0)); return s; }
+  total() { if (!this.parts) return 0; const s = this.starts(), k = s.length - 1; return s[k] + this.parts[k].dur; }
+  get base() { return this.parts ? this.starts()[this.cur] : 0; }
+  partAt(x) { const s = this.starts(); let k = 0; for (let i = 1; i < s.length; i++) if (x >= s[i] - 0.05) k = i; return k; }
+  playingId() { try { const d = this.p.getVideoData(); return d && d.video_id; } catch (e) { return null; } }
+  switchPart(k, local) {
+    clearTimeout(this.timer); this.timer = null;
+    this.cur = k; this.good = this.target = this.starts()[k] + local; this.lastSeek = now(); this.lastFire = now(); this.seekStart = now();
+    try { this.p.loadVideoById({videoId: this.parts[k].id, startSeconds: local}); } catch (e) {} // a paused angle stops again as soon as it starts
+    if (this.onPart) this.onPart(k);
+  }
+  // called every frame: when one part ends, carry on with the next one
+  poll() {
+    if (!this.parts || !this.want || now() - this.lastSeek < 1200) return;
+    const k = this.cur; if (k >= this.parts.length - 1) return;
+    let v = 0; try { v = this.p.getCurrentTime() || 0; } catch (e) {}
+    if (this.state === 0 || (this.state === 1 && this.playingId() === this.parts[k].id && v >= this.parts[k].dur - 0.25)) {
+      const s = this.starts();
+      this.switchPart(k + 1, Math.max(0, s[k] + this.parts[k].dur - s[k + 1]));
+    }
   }
   // an ad shows as "unstarted" (-1) while we want playback; during it the player reports the ad's time and ignores seeks
   get adLike() { return this.want && this.state === -1; }
@@ -749,14 +782,17 @@ class YTSrc {
   get time() {
     if (now() - this.lastSeek < 500) return this.target;
     if (this.adLike) return this.good;
+    if (this.parts && this.playingId() !== this.parts[this.cur].id) return this.target; // still switching to the next part
     let v = 0; try { v = this.p.getCurrentTime() || 0; } catch (e) {}
+    v += this.base;
     if (this.state === 1 || this.state === 2) this.good = v;
     return v;
   }
   set time(x) {
     this.target = x; this.lastSeek = now(); this.seekStart = now();
+    if (this.parts) { const k = this.partAt(x); if (k !== this.cur) { this.switchPart(k, Math.max(0, x - this.starts()[k])); return; } }
     if (this.timer) return;
-    const fire = () => { this.timer = null; this.lastFire = now(); try { this.p.seekTo(this.target, true); } catch (e) {} };
+    const fire = () => { this.timer = null; this.lastFire = now(); try { this.p.seekTo(Math.max(0, this.target - this.base), true); } catch (e) {} };
     if (now() - this.lastFire > 150) fire(); else this.timer = setTimeout(fire, 150);
   }
   get paused() { return !this.want; }
@@ -795,7 +831,7 @@ window.addEventListener('message', e => {
 function adLeft(a) {
   const s = a.src, ps = s.ps;
   if (!s.inAd || !ps || !ps.dur) return null;
-  if (Math.abs(ps.dur - a.dur) < 1) return null; // that's the video itself, not an ad
+  if (Math.abs(ps.dur - (s.vdur || a.dur)) < 1) return null; // that's the video itself, not an ad
   return Math.max(0, ps.dur - ps.cur - (now() - ps.at) / 1000);
 }
 function hideCaptions(p) {
@@ -833,9 +869,9 @@ const YT_ERRORS = {
 function save() {
   if (S.readOnly) return;
   const L = loaded(); if (!L.length) return;
-  const offs = {}, labels = {};
-  L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; });
-  store.set('mav:' + setKey(), {offs, labels, markers: S.markers, title: S.title || '', linkId: S.linkId || '', board: S.board || ''});
+  const offs = {}, labels = {}, gaps = {};
+  L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; if (a.kind === 'yt' && a.src.parts) gaps[fileKey(a)] = a.src.parts.map(p => p.gap || 0); });
+  store.set('mav:' + setKey(), {offs, labels, gaps, markers: S.markers, title: S.title || '', linkId: S.linkId || '', board: S.board || ''});
   saveLast();
 }
 function saveLast() {
@@ -851,6 +887,7 @@ function restore() {
     const k = fileKey(a);
     if (k in d.offs) a.off = d.offs[k];
     if (d.labels && d.labels[k]) a.label = d.labels[k];
+    if (d.gaps && d.gaps[k] && a.kind === 'yt' && a.src.parts) { d.gaps[k].forEach((g, i) => { if (a.src.parts[i]) a.src.parts[i].gap = +g || 0; }); a.dur = a.src.total(); }
   });
   if (Array.isArray(d.markers) && d.markers.length) {
     if (!S.shared) S.markers = d.markers;
@@ -877,7 +914,7 @@ function buildTile(a) {
   el.className = 'tile';
   el.innerHTML = `
     <div class="media"><div class="zoomer"><video playsinline preload="auto" muted></video><div class="ytwrap"><div class="ytview"><div id="yt${a.uid}"></div></div></div></div></div>
-    <div class="tbar"><span class="grip" title="ドラッグで移動">⠿</span><span class="num"></span><span class="lbl"></span><span class="chip2 yt" hidden>YouTube</span><span class="chip2 aud" hidden>音声</span><span class="sp"></span><button class="zreset" hidden title="拡大を元に戻す（0）">1×</button></div>
+    <div class="tbar"><span class="grip" title="ドラッグで移動">⠿</span><span class="num"></span><span class="lbl"></span><span class="chip2 part" hidden></span><span class="chip2 yt" hidden>YouTube</span><span class="chip2 aud" hidden>音声</span><span class="sp"></span><button class="zreset" hidden title="拡大を元に戻す（0）">1×</button></div>
     <div class="ctime"></div>
     <div class="refbadge">基準（この瞬間に合わせる）</div>
     <div class="bigplay"><span><svg viewBox="0 0 16 16"></svg></span></div>
@@ -1052,6 +1089,7 @@ function clearSource(a) {
   Object.assign(a, {kind:null, url:null, ytid:null, name:'', size:0, dur:0, ready:false, err:false});
   a.el.classList.remove('is-yt', 'ad');
   a.el.querySelector('.err').hidden = true;
+  setPartBadge(a, null, 0);
 }
 function loadFile(a, file) {
   clearSource(a);
@@ -1066,19 +1104,24 @@ function loadYouTube(a, id) {
   if (!loaded().length) { S.t = 0; a.off = 0; }
   Object.assign(a, {kind:'yt', ytid:id, name:'YouTube', size:0});
   a.el.classList.add('is-yt');
+  // "id1+id2": several videos (e.g. 前半 + 後半) shown as one continuous angle
+  const ids = id.split('+'), pp = a.pending && a.pending.id === id ? a.pending : null;
+  const parts = ids.length > 1 ? ids.map((v, i) => ({id: v, dur: pp && pp.durs && +pp.durs[i] > 0 ? +pp.durs[i] : 0, gap: pp && pp.gaps ? +pp.gaps[i] || 0 : 0})) : null;
+  setPartBadge(a, parts, 0);
   render(); renderPanel();
   ensureYT().then(() => {
     if (a.kind !== 'yt' || a.ytid !== id) return;
     fitYT(a);
     let src;
     const player = new YT.Player('yt' + a.uid, {
-      videoId: id, width: '100%', height: '100%',
+      videoId: ids[0], width: '100%', height: '100%',
       playerVars: {controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, iv_load_policy: 3, modestbranding: 1, cc_load_policy: 0, origin: location.origin},
       events: {
         onReady: () => {
           if (a.kind !== 'yt' || a.ytid !== id) return;
           player.mute(); hideCaptions(player);
           try { const d = player.getVideoData(); if (d && d.title) a.name = d.title; } catch (e) {}
+          if (parts) { probeParts(a, player, src, parts, id); return; }
           let tries = 0;
           const waitDur = () => {
             const d = player.getDuration();
@@ -1101,7 +1144,8 @@ function loadYouTube(a, id) {
         onError: e => showError(a, YT_ERRORS[e.data] || `YouTubeの動画を再生できません（エラー${e.data}）。`)
       }
     });
-    src = new YTSrc(player);
+    src = new YTSrc(player, parts);
+    src.onPart = k => setPartBadge(a, parts, k);
     a.src = src;
     applyAudio();
   }).catch(reason => {
@@ -1111,6 +1155,41 @@ function loadYouTube(a, id) {
       : 'YouTubeを読み込めませんでした。インターネットの接続を確認してください。<br>claude.aiの中ではYouTubeは使えないので、「マルチアングル起動.bat」かWeb版を使ってください。');
   });
   return true;
+}
+// read each part's length (load it muted; it stops as soon as it starts), then go back to the first part
+async function probeParts(a, player, src, parts, id) {
+  const wait = (f, ms) => new Promise(res => { const t0 = now(); (function chk() { const v = f(); if (v || now() - t0 > ms) res(v); else setTimeout(chk, 200); })(); });
+  const titles = [];
+  for (let i = 0; i < parts.length; i++) {
+    const pt = parts[i];
+    if (pt.dur > 0 && i) continue;
+    if (i) { try { player.loadVideoById(pt.id); } catch (e) {} }
+    // during an ad the player is "unstarted" (-1) and may report the ad's length, so only trust a playing/paused/cued video
+    const d = await wait(() => { if (a.kind !== 'yt' || a.ytid !== id) return -1; let st = -1; try { st = player.getPlayerState(); } catch (e) {} const v = src.playingId(); const du = player.getDuration(); return v === pt.id && du > 0 && [1, 2, 5].includes(st) ? du : 0; }, 20000);
+    if (d === -1) return;
+    if (!(d > 0)) { showError(a, `${i + 1}本目の動画の長さを読み取れませんでした。もう一度読み込んでください。`); return; }
+    pt.dur = d;
+    try { const vd = player.getVideoData(); if (vd && vd.title) titles[i] = vd.title; } catch (e) {}
+  }
+  if (src.playingId() !== parts[0].id) {
+    try { player.loadVideoById(parts[0].id); } catch (e) {}
+    await wait(() => src.playingId() === parts[0].id, 8000);
+  }
+  if (a.kind !== 'yt' || a.ytid !== id) return;
+  if (titles.length) a.name = titles.filter(Boolean).join(' ＋ ') || a.name;
+  a.dur = src.total(); onLoaded(a);
+}
+const partName = (n, k) => n === 2 ? ['前半', '後半'][k] : `${k + 1}本目`;
+function setPartBadge(a, parts, k) {
+  const b = a.el.querySelector('.chip2.part'); if (!b) return;
+  b.hidden = !parts; if (parts) b.textContent = partName(parts.length, k);
+}
+function joinedRows(a) {
+  const P = a.kind === 'yt' && a.src && a.src.parts; if (!P) return '';
+  return P.slice(1).map((pt, i) => `<div class="offs pgap" data-k="${i + 1}"><span class="k">${partName(P.length, i + 1)}の始まり</span>
+    <button data-g="-1">−1</button><button data-g="-0.1">−0.1</button>
+    <input type="number" step="0.1" aria-label="${partName(P.length, i + 1)}の始まりのずれ（秒）"><span class="k">秒</span>
+    <button data-g="0.1">+0.1</button><button data-g="1">+1</button></div>`).join('');
 }
 function removeAngle(a) {
   const k = idx(a); if (k < 0 || S.readOnly) return;
@@ -1388,6 +1467,7 @@ function setLight(on) {
 let last = now(), lastRefresh = 0;
 function tick(ts) {
   const dt = Math.min(0.25, (ts - last) / 1000); last = ts;
+  S.angles.forEach(a => { if (a.kind === 'yt' && a.src && a.src.poll) a.src.poll(); });
   if (S.playing && !S.sync) {
     const m = mainA(), ms = m && m.src;
     let hold = false;
@@ -1626,6 +1706,12 @@ function paintMarks() {
     box.appendChild(i);
     const j = document.createElement('s'); j.style.left = i.style.left; j.style.background = tagOf(m.tag).c; if (m.side) j.className = m.side; box2.appendChild(j);
   });
+  const ma = mainA();
+  if (ma && ma.ready && ma.kind === 'yt' && ma.src.parts) ma.src.starts().slice(1).forEach(st => {
+    const x = ((st - ma.off - a0) / span * 100) + '%';
+    const i = document.createElement('i'); i.className = 'half'; i.style.left = x; box.appendChild(i);
+    const j = document.createElement('s'); j.className = 'half'; j.style.left = x; box2.appendChild(j);
+  });
   S.notes.forEach(n => {
     const i = document.createElement('i'); i.className = 'cm'; i.style.left = ((n.t - a0) / span * 100) + '%'; box.appendChild(i);
     const j = document.createElement('s'); j.className = 'cm'; j.style.left = i.style.left; box2.appendChild(j);
@@ -1703,7 +1789,8 @@ async function shorten(data) {
 }
 async function buildShareUrl(jump) {
   const obj = {v: 3, n: S.title || '',
-    s: S.angles.map(a => a.kind === 'yt' ? ['y', a.ytid, a.label, +a.off.toFixed(3)] : a.kind === 'file' ? ['f', a.name, a.label, +a.off.toFixed(3)] : 0),
+    s: S.angles.map(a => a.kind === 'yt' ? ['y', a.ytid, a.label, +a.off.toFixed(3)].concat(a.src && a.src.parts ? [a.src.parts.map(p => +p.dur.toFixed(2)), a.src.parts.map(p => +(p.gap || 0).toFixed(2))] : [])
+      : a.kind === 'file' ? ['f', a.name, a.label, +a.off.toFixed(3)] : 0),
     m: S.markers.map(m => [+m.t.toFixed(2), m.tag, m.note || '', m.cam == null ? -1 : m.cam, m.id, m.by || '', m.side || ''])};
   if (S.readOnly || !prefs.shareEdit) obj.ro = 1; // view-only: whoever opens it can't add, edit or delete tags
   const j = jump ? [+jump.t.toFixed(2), jump.cam == null ? -1 : jump.cam] : null;
@@ -1809,7 +1896,7 @@ async function openShared() {
       str = j.d; S.linkId = mk[1]; S.board = j.b || mk[1]; setNotes(j.notes);
     }
     const d = await decodeShare(str);
-    const slots = (d.s || []).map(x => x ? {k: x[0], id: x[0] === 'y' ? x[1] : null, name: x[0] === 'f' ? x[1] : null, label: x[2], off: x[3]} : null);
+    const slots = (d.s || []).map(x => x ? {k: x[0], id: x[0] === 'y' ? x[1] : null, name: x[0] === 'f' ? x[1] : null, label: x[2], off: x[3], durs: x[4], gaps: x[5]} : null);
     // older links kept empty slots; tag camera numbers refer to the list without them
     const map = []; let k = 0; slots.forEach((p, i) => { map[i] = p ? k++ : null; });
     const markers = (d.m || []).map((x, n) => ({id: x[4] || 'sh' + n, t: x[0], tag: x[1], note: x[2], cam: x[3] < 0 || map[x[3]] == null ? null : map[x[3]], by: x[5] || '', side: x[6] || ''}));
@@ -2010,9 +2097,26 @@ $('#mMemo').addEventListener('click', () => {
 });
 
 /* ---------- YouTube add dialog ---------- */
-function openYtPop() {
+let ytJoinTo = null;
+function openYtPop(joinTo) {
   if (IS_FILE) { toast('YouTubeは「マルチアングル起動.bat」かWeb版から開いたときに使えます', 3500); return; }
+  ytJoinTo = joinTo && joinTo.kind === 'yt' ? joinTo : null;
+  $('#ytPopTitle').textContent = ytJoinTo ? `「${ytJoinTo.label}」に続きの動画をつなげる` : 'YouTubeの動画を追加';
+  $('#ytPopText').textContent = ytJoinTo ? '今の動画の続き（後半など）のURLを貼り付けてください。今の動画の終わりから続けて再生します。'
+    : 'URLを1行に1つずつ貼り付けてください。アングルとして順番に追加されます（全部で最大6本）。';
+  $('#ytJoinRow').hidden = !!ytJoinTo; $('#ytJoin').checked = false;
+  $('#ytOk').textContent = ytJoinTo ? 'つなげる' : '追加する';
   $('#ytPop').hidden = false; $('#ytText').value = ''; $('#ytText').focus();
+}
+// put more videos after an angle's current one (keeps its name and sync)
+function joinVideos(a, ids) {
+  const P = a.src && a.src.parts, cur = P ? P.map(p => p.id) : a.ytid.split('+');
+  const all = cur.concat(ids.filter(x => !cur.includes(x)));
+  if (all.length === cur.length) { toast('同じ動画はつなげられません'); return; }
+  const durs = P ? P.map(p => p.dur) : [a.dur], gaps = P ? P.map(p => p.gap || 0) : [0];
+  a.pending = {k: 'y', id: all.join('+'), label: a.label, off: a.off, durs, gaps};
+  const keepT = S.t; loadYouTube(a, all.join('+')); S.t = keepT;
+  toast(`${a.label}に${partName(all.length, all.length - 1)}をつなげています…`, 2500);
 }
 const closeYtPop = () => { $('#ytPop').hidden = true; };
 $('#ytAdd').addEventListener('click', openYtPop);
@@ -2022,15 +2126,17 @@ $('#ytPop').addEventListener('click', e => { if (e.target.id === 'ytPop') closeY
 $('#ytOk').addEventListener('click', () => {
   const ids = allYouTubeIds($('#ytText').value);
   if (!ids.length) { toast('YouTubeの動画のURLが見つかりませんでした'); return; }
-  closeYtPop(); addYouTubeIds(ids);
+  closeYtPop();
+  if (ytJoinTo) { joinVideos(ytJoinTo, ids); return; }
+  addYouTubeIds($('#ytJoin').checked && ids.length > 1 ? [ids.join('+')] : ids);
 });
 $('#startYt').addEventListener('submit', e => {
   e.preventDefault();
   const ids = allYouTubeIds($('#startYtUrl').value);
   if (!ids.length) { toast('YouTubeの動画のURLを貼り付けてください'); return; }
-  $('#startYtUrl').value = ''; addYouTubeIds(ids);
+  $('#startYtUrl').value = ''; addYouTubeIds($('#startJoin').checked && ids.length > 1 ? [ids.join('+')] : ids);
 });
-if (IS_FILE) { $('#startYt').hidden = true; $('#startHint').textContent = '動画ファイルはこの枠にドロップできます。YouTubeは「マルチアングル起動.bat」かWeb版から開くと使えます'; }
+if (IS_FILE) { $('#startYt').hidden = true; $('#startJoinRow').hidden = true; $('#startHint').textContent = '動画ファイルはこの枠にドロップできます。YouTubeは「マルチアングル起動.bat」かWeb版から開くと使えます'; }
 
 /* ---------- render ---------- */
 function setTab(t) {
@@ -2108,9 +2214,11 @@ function renderPanel() {
         <button data-o="-0.1">−0.1</button><button data-o="${-FRAME}">−1f</button>
         <input type="number" step="0.01" aria-label="アングル${i+1}のずれ（秒）"><span class="k">秒</span>
         <button data-o="${FRAME}">+1f</button><button data-o="0.1">+0.1</button></div>` : ''}
+      ${a.ready ? joinedRows(a) : ''}
       <div class="acts">
         <button data-act="file">${a.kind ? 'ファイルに差し替え' : 'ファイルを選ぶ'}</button>
         ${IS_FILE ? '' : `<button data-act="yt">${a.kind ? 'YouTubeに差し替え' : 'YouTube'}</button>`}
+        ${a.ready && a.kind === 'yt' ? '<button data-act="join">続きの動画（後半）をつなげる</button>' : ''}
         ${a.ready && loaded().length > 1 ? '<button data-act="resync">合わせ直す</button>' : ''}
         <button data-act="remove">このアングルを外す</button>
       </div>`;
@@ -2126,11 +2234,20 @@ function renderPanel() {
       a.off = v; renderLanes(); seekAll(S.t); save();
     });
     row.querySelectorAll('[data-o]').forEach(b => b.addEventListener('click', () => { a.off += +b.dataset.o; showOff(); renderLanes(); seekAll(S.t); save(); }));
+    row.querySelectorAll('.pgap').forEach(g => {
+      const pt = a.src.parts[+g.dataset.k], gi = g.querySelector('input');
+      const show = () => { gi.value = (pt.gap || 0).toFixed(1); };
+      const apply = v => { pt.gap = Math.round(v * 100) / 100; a.dur = a.src.total(); show(); renderLanes(); paintMarks(); seekAll(S.t); save(); };
+      show();
+      gi.addEventListener('change', () => { const v = parseFloat(gi.value); if (isFinite(v)) apply(v); else show(); });
+      g.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => apply((pt.gap || 0) + +b.dataset.g)));
+    });
     row.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
       const act = b.dataset.act;
       if (act === 'file') a.fileInput.click();
       else if (act === 'remove') removeAngle(a);
       else if (act === 'resync') enterSync(idx(a));
+      else if (act === 'join') openYtPop(a);
       else if (act === 'yt') {
         if (a.kind) clearSource(a);
         a.want = null; setMain(i); render(); renderPanel();
