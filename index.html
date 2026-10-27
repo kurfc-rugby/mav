@@ -252,12 +252,18 @@ textarea.copybox{width:100%;height:80px;background:var(--bg);border:1px solid va
 .side.us{background:var(--enji)}
 .side.op{background:#3c5a7a}
 .filters .sep{width:100%;height:0}
-body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
+body.readonly #teamRow,body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
 body.readonly .mrow input{pointer-events:none}
 body.readonly #bulk:not(.need),body.readonly #ytAdd,body.readonly #syncBtn,body.readonly #resumeBtn,body.readonly #addrow,
 body.readonly .arow .offs,body.readonly .arow .acts,body.readonly #offHint,body.readonly .empty .ytform{display:none!important}
 body.readonly .arow .alabel,body.readonly #matchTitle{pointer-events:none}
 /* shared memos (みんなのメモ) */
+.teamrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;font-size:12px}
+.teamrow .k{color:var(--muted)}
+.teamrow input{min-width:0;padding:5px 7px;font-size:13px}
+.teamrow input:first-of-type{border-left:3px solid var(--enji)}
+.teamrow input:last-of-type{border-left:3px solid #4f6f96}
+@media (pointer:coarse){ .teamrow input{font-size:16px} }
 .notebox{border:1px solid var(--line);border-left:4px solid #e8dcc0;border-radius:4px;padding:8px;display:grid;gap:6px;background:var(--raise)}
 /* stays at the top of the tag list while you scroll through it (phones: at the top of the screen) */
 .notebox{position:sticky;top:0;z-index:4;box-shadow:0 -12px 0 var(--panel),0 6px 12px -4px #0009}
@@ -523,6 +529,7 @@ body.theater-on .mbar{display:none!important}
         <div class="nbrow"><input id="nbName" maxlength="20" placeholder="名前" aria-label="名前"><input id="nbText" maxlength="500" placeholder="この場面へのメモ" aria-label="メモ" enterkeyhint="send"><button class="btn sm pri" id="nbSend">書く</button></div>
         <p class="nbsub" id="nbSub">このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。</p>
       </div>
+      <div class="teamrow" id="teamRow"><span class="k">チーム名</span><input id="teamUs" maxlength="12" placeholder="自チーム" aria-label="左の列のチーム名"><span class="k">vs</span><input id="teamOp" maxlength="12" placeholder="相手" aria-label="右の列のチーム名"></div>
       <div class="tags" id="tags"></div>
       <div class="filters" id="filters"></div>
       <div class="reelrow">
@@ -543,7 +550,7 @@ body.theater-on .mbar{display:none!important}
       <ol class="howto">
         <li>動画を入れる：ファイルを画面にドロップするか、YouTubeのURLをコピーして <kbd>Ctrl</kbd>+<kbd>V</kbd>（1〜6本。あとから足したり外したりできます）</li>
         <li>「同期を合わせる」：基準のアングルで合わせやすい瞬間（キックオフなど）を決め、ほかのアングルを1本ずつ左右に並べて同じ瞬間に合わせます。あとから1本だけ合わせ直すときは「アングル」タブの「合わせ直す」</li>
-        <li>再生しながら、場面ごとにタグを付ける。タグは「自チーム」「相手」の2列に分かれています（ペナルティは反則をしたチーム）。スマホは下の「＋タグ」</li>
+        <li>再生しながら、場面ごとにタグを付ける。タグは「自チーム」「相手」の2列に分かれています（ペナルティは反則をしたチーム）。ほかのチームの試合を見るときは、タグの上の「チーム名」に2チームの名前を入れると、列の名前がそのチーム名になります。スマホは下の「＋タグ」</li>
         <li>タグの一覧から場面に飛ぶか、「連続再生」でタグの場面だけを順に見る</li>
         <li>「共有リンク」で部員に送る（YouTubeの動画とズレ・タグがそのまま開きます）。ふつうは見るだけのリンクで、受け取った人はタグを変えられません。一緒にタグを付けてもらうときは「受け取った人もタグを付けられるようにする」をオンに。タグの「共有」を押すと、その場面から開くリンクになります</li>
       </ol>
@@ -652,7 +659,9 @@ const TAGS = [
 ];
 const tagOf = k => TAGS.find(x => x.k === k) || TAGS[5];
 // which team the play belongs to (a penalty is tagged to the team that gave it away)
+// the two columns of tags: by default our team / the opponent; for other teams' matches (research) they can be renamed
 const SIDES = {us: {name: '自チーム', short: '自'}, op: {name: '相手', short: '相手'}};
+const teamShort = n => n.length <= 4 ? n : n.slice(0, 4) + '…';
 const sideBadge = m => SIDES[m.side] ? `<span class="side ${m.side}">${SIDES[m.side].short}</span>` : '';
 const sideText = m => SIDES[m.side] ? `（${SIDES[m.side].name}）` : '';
 const RATES = [0.25, 0.5, 0.75, 1, 1.5, 2];
@@ -713,7 +722,7 @@ const S = {
   title: '', jump: null, readOnly: false, sideFilter: '', theater: false, theaterAuto: false,
   angles: [], main: 0, layout: prefs.layout || (PHONE ? 'single' : 'focus'), playing: false, t: 0, rate: 1, muted: PHONE, forceMute: false,
   sync: false, markers: [], syncBackup: null, reel: null, filter: 'all', shared: false,
-  linkId: '', board: '', notes: [], reply: null, noteT: null,
+  linkId: '', board: '', notes: [], reply: null, noteT: null, teams: ['', ''],
   light: prefs.light == null ? PHONE : prefs.light, holdAt: 0, stalls: [], stallHinted: false
 };
 let UID = 0, ZTOP = 1;
@@ -871,7 +880,7 @@ function save() {
   const L = loaded(); if (!L.length) return;
   const offs = {}, labels = {}, gaps = {};
   L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; if (a.kind === 'yt' && a.src.parts) gaps[fileKey(a)] = a.src.parts.map(p => p.gap || 0); });
-  store.set('mav:' + setKey(), {offs, labels, gaps, markers: S.markers, title: S.title || '', linkId: S.linkId || '', board: S.board || ''});
+  store.set('mav:' + setKey(), {offs, labels, gaps, markers: S.markers, title: S.title || '', teams: S.teams, linkId: S.linkId || '', board: S.board || ''});
   saveLast();
 }
 function saveLast() {
@@ -894,6 +903,7 @@ function restore() {
     else { const have = new Set(S.markers.map(m => m.id)); d.markers.forEach(m => { if (!have.has(m.id)) S.markers.push(m); }); S.markers.sort((x, y) => x.t - y.t); }
   }
   if (!S.title && d.title) { S.title = d.title; $('#matchTitle').value = d.title; }
+  if (!S.teams[0] && !S.teams[1] && Array.isArray(d.teams) && (d.teams[0] || d.teams[1])) setTeams(d.teams[0], d.teams[1], true);
   if (!S.board && d.board && d.linkId) { S.linkId = d.linkId; S.board = d.board; startNotes(); }
   return true;
 }
@@ -1675,7 +1685,7 @@ function fillFilters(box) {
   box.innerHTML = '';
   const sc = {us: 0, op: 0}; S.markers.forEach(m => { if (sc[m.side] != null) sc[m.side]++; });
   if (sc.us || sc.op) {
-    [['', 'どちらも'], ['us', '自チーム ' + sc.us], ['op', '相手 ' + sc.op]].forEach(([k, label]) => {
+    [['', 'どちらも'], ['us', SIDES.us.name + ' ' + sc.us], ['op', SIDES.op.name + ' ' + sc.op]].forEach(([k, label]) => {
       const b = document.createElement('button'); b.textContent = label;
       if (k) b.style.setProperty('--c', k === 'us' ? 'var(--enji-hi)' : '#6b8fb8');
       b.classList.toggle('on', (S.sideFilter || '') === k);
@@ -1732,8 +1742,10 @@ function copyText(text, okMsg) {
   try { navigator.clipboard.writeText(text).then(() => toast(okMsg, 3000), fallback); } catch (e) { fallback(); }
 }
 const OP_KEYS = ['Q', 'W', 'E', 'R', 'T'];
+const tagSets = [];
 function buildTagButtons(box, big, onPick) {
-  box.innerHTML = '<div class="th us">自チーム</div><div class="th op">相手</div>';
+  if (!tagSets.some(x => x[0] === box)) tagSets.push([box, big, onPick]);
+  box.innerHTML = `<div class="th us">${esc(SIDES.us.name)}</div><div class="th op">${esc(SIDES.op.name)}</div>`;
   TAGS.forEach((tag, n) => {
     const sides = tag.k === 'memo' ? [''] : ['us', 'op'];
     sides.forEach(side => {
@@ -1748,6 +1760,18 @@ function buildTagButtons(box, big, onPick) {
   });
 }
 buildTagButtons($('#tags'), false, (tag, side) => addMarker(tag, S.t, '', side));
+function setTeams(a, b, quiet) {
+  a = String(a || '').trim().slice(0, 12); b = String(b || '').trim().slice(0, 12);
+  S.teams = [a, b];
+  SIDES.us.name = a || '自チーム'; SIDES.us.short = a ? teamShort(a) : '自';
+  SIDES.op.name = b || '相手'; SIDES.op.short = b ? teamShort(b) : '相手';
+  if (document.activeElement !== $('#teamUs')) $('#teamUs').value = a;
+  if (document.activeElement !== $('#teamOp')) $('#teamOp').value = b;
+  tagSets.forEach(([box, big, onPick]) => buildTagButtons(box, big, onPick));
+  renderMarkers(); renderReel();
+  if (!quiet) save();
+}
+['teamUs', 'teamOp'].forEach(id => $('#' + id).addEventListener('input', () => setTeams($('#teamUs').value, $('#teamOp').value)));
 $('#preSel').value = String(prefs.pre); $('#postSel').value = String(prefs.post);
 $('#preSel').addEventListener('change', e => { prefs.pre = +e.target.value; savePrefs(); });
 $('#postSel').addEventListener('change', e => { prefs.post = +e.target.value; savePrefs(); });
@@ -1788,7 +1812,7 @@ async function shorten(data) {
   return null;
 }
 async function buildShareUrl(jump) {
-  const obj = {v: 3, n: S.title || '',
+  const obj = {v: 3, n: S.title || '', ...(S.teams[0] || S.teams[1] ? {tm: S.teams} : {}),
     s: S.angles.map(a => a.kind === 'yt' ? ['y', a.ytid, a.label, +a.off.toFixed(3)].concat(a.src && a.src.parts ? [a.src.parts.map(p => +p.dur.toFixed(2)), a.src.parts.map(p => +(p.gap || 0).toFixed(2))] : [])
       : a.kind === 'file' ? ['f', a.name, a.label, +a.off.toFixed(3)] : 0),
     m: S.markers.map(m => [+m.t.toFixed(2), m.tag, m.note || '', m.cam == null ? -1 : m.cam, m.id, m.by || '', m.side || ''])};
@@ -1820,7 +1844,7 @@ function tagSummary() {
   return TAGS.map(t => {
     const L = S.markers.filter(m => m.tag === t.k); if (!L.length) return '';
     const us = L.filter(m => m.side === 'us').length, op = L.filter(m => m.side === 'op').length;
-    return t.k === 'memo' || (!us && !op) ? `${t.name}${L.length}` : `${t.name}（${[us ? '自' + us : '', op ? '相手' + op : ''].filter(Boolean).join('・')}）`;
+    return t.k === 'memo' || (!us && !op) ? `${t.name}${L.length}` : `${t.name}（${[us ? SIDES.us.short + us : '', op ? SIDES.op.short + op : ''].filter(Boolean).join('・')}）`;
   }).filter(Boolean).join(' ');
 }
 let shareUrl = '', shareSeq = 0, sharePromise = Promise.resolve(), shareTimer = 0;
@@ -1903,6 +1927,7 @@ async function openShared() {
     S.shared = true;
     if (d.ro) { S.readOnly = true; document.body.classList.add('readonly'); $('#robar').hidden = false; $('#matchTitle').readOnly = true; setTab('tags'); }
     if (d.n) { S.title = d.n; $('#matchTitle').value = d.n; }
+    if (Array.isArray(d.tm)) setTeams(d.tm[0], d.tm[1], true);
     const jj = mk && mk[2] != null ? [+mk[2], +mk[3]] : d.j;
     if (jj) S.jump = {t: jj[0], cam: jj[1] < 0 || map[jj[1]] == null ? null : map[jj[1]]};
     applyPlan(slots, markers);
