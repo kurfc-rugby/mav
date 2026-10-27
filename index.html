@@ -252,7 +252,7 @@ textarea.copybox{width:100%;height:80px;background:var(--bg);border:1px solid va
 .side.us{background:var(--enji)}
 .side.op{background:#3c5a7a}
 .filters .sep{width:100%;height:0}
-body.readonly #teamRow,body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
+body.readonly #teamRow,body.readonly #liveNote,body.readonly #tags,body.readonly #mTag,body.readonly #tTag,body.readonly .mrow .x{display:none!important}
 body.readonly .mrow input{pointer-events:none}
 body.readonly #bulk:not(.need),body.readonly #ytAdd,body.readonly #syncBtn,body.readonly #resumeBtn,body.readonly #addrow,
 body.readonly .arow .offs,body.readonly .arow .acts,body.readonly #offHint,body.readonly .empty .ytform{display:none!important}
@@ -442,7 +442,7 @@ body.theater-on .mbar{display:none!important}
       <p><strong>アプリの中のブラウザで開いています。</strong>動画がうまく再生されないことがあります。右上（または右下）のメニューから「ブラウザで開く」「Chromeで開く」「Safariで開く」を選んでください。</p>
       <button class="btn" id="inappClose">このまま使う</button>
     </div>
-    <div class="banner" id="robar" hidden><p><strong>閲覧用のリンクです。</strong>見ることと「みんなのメモ」だけできます（動画の追加・同期・タグの変更はできません）。メモは右の「タグ」の一番上（スマホは下の「＋メモ」）から書けます。</p></div>
+    <div class="banner" id="robar" hidden><p><strong>閲覧用のリンクです。</strong>見ることと「みんなのメモ」だけできます（動画の追加・同期・タグの変更はできません。編集用のリンクで変えた内容は自動で反映されます）。メモは右の「タグ」の一番上（スマホは下の「＋メモ」）から書けます。</p></div>
     <div class="banner" id="tapbar" hidden><p><strong>▶ 下の映像をタップすると再生が始まります。</strong>スマホでは最初の1回だけ必要です（映像のどこを押しても大丈夫です）。</p></div>
     <div class="banner" id="syncbar" hidden></div>
     <div class="banner" id="reelbar" hidden>
@@ -530,6 +530,7 @@ body.theater-on .mbar{display:none!important}
         <p class="nbsub" id="nbSub">このリンクを開いた全員に見えます。自分が書いたメモだけ消せます。</p>
       </div>
       <div class="teamrow" id="teamRow"><span class="k">チーム名</span><input id="teamUs" maxlength="12" placeholder="自チーム" aria-label="左の列のチーム名"><span class="k">vs</span><input id="teamOp" maxlength="12" placeholder="相手" aria-label="右の列のチーム名"></div>
+      <p class="nbsub" id="liveNote" hidden></p>
       <div class="tags" id="tags"></div>
       <div class="filters" id="filters"></div>
       <div class="reelrow">
@@ -723,6 +724,7 @@ const S = {
   angles: [], main: 0, layout: prefs.layout || (PHONE ? 'single' : 'focus'), playing: false, t: 0, rate: 1, muted: PHONE, forceMute: false,
   sync: false, markers: [], syncBackup: null, reel: null, filter: 'all', shared: false,
   linkId: '', board: '', notes: [], reply: null, noteT: null, teams: ['', ''],
+  liveVer: 0, liveBase: null, liveKv: {}, liveDeferred: null,
   light: prefs.light == null ? PHONE : prefs.light, holdAt: 0, stalls: [], stallHinted: false
 };
 let UID = 0, ZTOP = 1;
@@ -882,6 +884,7 @@ function save() {
   L.forEach(a => { offs[fileKey(a)] = a.off; labels[fileKey(a)] = a.label; if (a.kind === 'yt' && a.src.parts) gaps[fileKey(a)] = a.src.parts.map(p => p.gap || 0); });
   store.set('mav:' + setKey(), {offs, labels, gaps, markers: S.markers, title: S.title || '', teams: S.teams, linkId: S.linkId || '', board: S.board || ''});
   saveLast();
+  scheduleLive();
 }
 function saveLast() {
   const slots = S.angles.map(a => a.kind === 'yt' ? {k: 'y', id: a.ytid, label: a.label}
@@ -899,7 +902,8 @@ function restore() {
     if (d.gaps && d.gaps[k] && a.kind === 'yt' && a.src.parts) { d.gaps[k].forEach((g, i) => { if (a.src.parts[i]) a.src.parts[i].gap = +g || 0; }); a.dur = a.src.total(); }
   });
   if (Array.isArray(d.markers) && d.markers.length) {
-    if (!S.shared) S.markers = d.markers;
+    if (!S.shared) { if (!S.liveBase) S.markers = d.markers; }
+    else if (S.liveBase || S.board) { /* a shared (live) analysis: the shared tags are the ones that count */ }
     else { const have = new Set(S.markers.map(m => m.id)); d.markers.forEach(m => { if (!have.has(m.id)) S.markers.push(m); }); S.markers.sort((x, y) => x.t - y.t); }
   }
   if (!S.title && d.title) { S.title = d.title; $('#matchTitle').value = d.title; }
@@ -1075,6 +1079,7 @@ function onLoaded(a) {
     if (p.label) a.label = p.label;
   }
   a.pending = null; a.want = null;
+  if (S.liveBase) applyLiveKv(true);
   a.src.vdur = a.dur;
   if (!S.mainChosen) S.main = Math.max(0, S.angles.findIndex(x => x.ready));
   if (!S.angles.some(x => x.pending)) {
@@ -1906,6 +1911,7 @@ function applyPlan(slots, markers) {
   render(); renderPanel();
   if (slots.some(p => p && p.k === 'f')) setTab('angles');
 }
+let liveFirst = false;
 async function openShared() {
   const m = location.hash.match(/^#s=([\w-]+)$/), mk = location.hash.match(/^#k=([A-Za-z0-9]{4,12})(?:&j=(-?[\d.]+),(-?\d+))?$/);
   if (!m && !mk) return false;
@@ -1917,7 +1923,7 @@ async function openShared() {
       toast('共有された分析を読み込み中…', 4000);
       const j = await (await fetch(SHORT_API + '?k=' + mk[1] + '&o=' + prefs.me)).json();
       if (!j || !j.d) { S.shared = false; toast('このリンクの分析が見つかりませんでした', 4000); return false; }
-      str = j.d; S.linkId = mk[1]; S.board = j.b || mk[1]; setNotes(j.notes);
+      str = j.d; S.linkId = mk[1]; S.board = j.b || mk[1]; setNotes(j.notes); liveFirst = j.live || false;
     }
     const d = await decodeShare(str);
     const slots = (d.s || []).map(x => x ? {k: x[0], id: x[0] === 'y' ? x[1] : null, name: x[0] === 'f' ? x[1] : null, label: x[2], off: x[3], durs: x[4], gaps: x[5]} : null);
@@ -1931,6 +1937,7 @@ async function openShared() {
     const jj = mk && mk[2] != null ? [+mk[2], +mk[3]] : d.j;
     if (jj) S.jump = {t: jj[0], cam: jj[1] < 0 || map[jj[1]] == null ? null : map[jj[1]]};
     applyPlan(slots, markers);
+    if (liveFirst) applyLive(liveFirst);
     toast('共有された分析を開きました', 2500);
     // keep the short link in the address bar: it is the page everyone writes memos on
     try { history.replaceState(null, '', location.pathname + (mk ? '#k=' + mk[1] : '')); } catch (e) {}
@@ -1946,22 +1953,130 @@ $('#resumeBtn').addEventListener('click', () => {
 
 /* ---------- みんなのメモ (shared memos on one short link) ---------- */
 let notesTimer = 0, notesBusy = false;
+// someone is typing in the tag list / angle names: redrawing now would throw away what they type
+const typingInList = () => { const ae = document.activeElement; return !!(ae && ae.matches && ae.matches('#mlist input, .arow input')); };
 function setNotes(list) {
   if (!Array.isArray(list)) return;
   S.notes = list.map(n => ({...n, cam: n.cam == null || n.cam < 0 ? null : n.cam})).sort((a, b) => a.t - b.t || a.at - b.at);
+  if (typingInList()) { S.notesDirty = true; return; }
   renderMarkers();
 }
 async function pullNotes() {
   if (!S.board || !SHORT_API || notesBusy || document.hidden) return;
   notesBusy = true;
-  try { const j = await (await fetch(SHORT_API + '?b=' + S.board + '&o=' + prefs.me)).json(); if (j && j.notes) setNotes(j.notes); }
+  try {
+    const j = await (await fetch(SHORT_API + '?b=' + S.board + '&o=' + prefs.me + '&v=' + S.liveVer)).json();
+    if (j && j.notes) setNotes(j.notes);
+    if (j && j.live) applyLive(j.live);
+    else if (j && !j.ver && !S.readOnly && !S.liveBase) seedLive(); // nobody has edited this analysis together yet
+  }
   catch (e) {} finally { notesBusy = false; }
 }
+
+/* ---------- みんなで編集: tags, team names and sync are shared by everyone on the same link ---------- */
+// changes go to the server one by one (add / change / delete a tag, one setting), and the server applies them in order,
+// so two people editing at the same time never wipe out each other's work
+const liveOn = () => !!S.board && !!SHORT_API && !IS_FILE;
+const liveTag = m => ({id: m.id, t: +(+m.t).toFixed(2), tag: m.tag, side: m.side || '', cam: m.cam == null ? null : m.cam, note: m.note || '', by: m.by || ''});
+function liveKvNow() {
+  const kv = {title: S.title || '', teams: S.teams.slice()};
+  const A = S.angles.filter(a => a.kind);
+  // one key per angle, so two people syncing different cameras at the same time don't undo each other
+  if (A.length && A.every(a => a.ready)) S.angles.forEach((a, i) => {
+    if (i > 5 || !a.ready) return;
+    kv['off' + i] = +a.off.toFixed(3); kv['label' + i] = a.label;
+    if (a.kind === 'yt' && a.src.parts) kv['gap' + i] = a.src.parts.map(p => p.gap || 0);
+  });
+  return kv;
+}
+function liveDiff() {
+  const ops = [], base = S.liveBase || {}, cur = {};
+  S.markers.forEach(m => { const r = liveTag(m); cur[m.id] = 1; if (base[m.id] !== JSON.stringify(r)) ops.push({t: 'tag', id: m.id, data: r}); });
+  Object.keys(base).forEach(id => { if (!cur[id]) ops.push({t: 'del', id}); });
+  const kv = liveKvNow();
+  Object.keys(kv).forEach(k => { if (S.liveKv[k] !== JSON.stringify(kv[k])) ops.push({t: 'kv', k, v: kv[k]}); });
+  return ops;
+}
+let liveTimer = 0, liveBusy = false;
+let scheduleLive = function () {
+  if (!liveOn() || S.readOnly || !S.liveBase) return;
+  clearTimeout(liveTimer); liveTimer = setTimeout(pushLive, 700);
+};
+async function sendLive(body) {
+  liveBusy = true; setLiveNote('保存中…');
+  try {
+    const j = await (await fetch(SHORT_API, {method: 'POST', body: JSON.stringify(body)})).json();
+    if (!j || !j.live) throw 0;
+    applyLive(j.live);
+  } catch (e) { setLiveNote('保存できませんでした（電波の良い所で自動でやり直します）'); setTimeout(scheduleLive, 5000); }
+  finally { liveBusy = false; }
+}
+async function pushLive() {
+  if (liveBusy) { scheduleLive(); return; }
+  const ops = liveDiff(); if (!ops.length) return;
+  await sendLive({op: 'live', b: S.board, ops});
+}
+function seedLive() {
+  if (liveBusy || S.readOnly) return;
+  sendLive({op: 'live', b: S.board, seed: {tags: S.markers.map(liveTag), kv: liveKvNow()}, ops: []});
+}
+function applyLive(st) {
+  if (!st || typeof st.ver !== 'number') return;
+  // while someone is typing in the list, wait (redrawing would throw away what they are typing)
+  if (typingInList()) { S.liveDeferred = st; return; }
+  S.liveDeferred = null;
+  const pending = S.liveBase && !S.readOnly ? liveDiff() : []; // my changes the server hasn't got yet
+  S.liveVer = st.ver;
+  const tags = Object.values(st.tags || {}).filter(t => t && !t.del);
+  S.liveBase = {}; tags.forEach(t => { S.liveBase[t.id] = JSON.stringify(liveTag(t)); });
+  S.liveKv = {}; Object.keys(st.kv || {}).forEach(k => { S.liveKv[k] = JSON.stringify(st.kv[k]); });
+  let mk = tags.map(t => ({id: t.id, t: +t.t || 0, tag: t.tag, note: t.note || '', cam: t.cam == null ? null : t.cam, by: t.by || '', side: t.side || ''}));
+  const keepKv = {};
+  pending.forEach(op => {
+    if (op.t === 'tag') {
+      if (st.tags && st.tags[op.id] && st.tags[op.id].del) return; // someone deleted it meanwhile
+      const i = mk.findIndex(x => x.id === op.id), m = Object.assign({}, mk[i] || {}, op.data);
+      if (i >= 0) mk[i] = m; else mk.push(m);
+    } else if (op.t === 'del') mk = mk.filter(x => x.id !== op.id);
+    else keepKv[op.k] = 1;
+  });
+  mk.sort((x, y) => x.t - y.t);
+  S.markers = mk;
+  const kv = st.kv || {};
+  if (!keepKv.title && typeof kv.title === 'string' && kv.title !== S.title) { S.title = kv.title; if (document.activeElement !== $('#matchTitle')) $('#matchTitle').value = kv.title; }
+  if (!keepKv.teams && Array.isArray(kv.teams) && (kv.teams[0] !== S.teams[0] || kv.teams[1] !== S.teams[1])) setTeams(kv.teams[0], kv.teams[1], true);
+  applyLiveKv(false, keepKv);
+  renderMarkers();
+  saveLocalOnly();
+  setLiveNote(S.readOnly ? '' : `みんなと共有中・${new Date(st.at || Date.now()).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}に更新`);
+  if (pending.length) scheduleLive();
+}
+// sync offsets / angle names / second-half gaps from the shared state (by angle number)
+function applyLiveKv(quiet, keep = {}) {
+  if (S.sync) return;
+  const kv = {}; Object.keys(S.liveKv || {}).forEach(k => { try { kv[k] = JSON.parse(S.liveKv[k]); } catch (e) {} });
+  let moved = false;
+  S.angles.forEach((a, i) => {
+    const o = kv['off' + i], l = kv['label' + i], g = kv['gap' + i];
+    if (!keep['off' + i] && a.ready && typeof o === 'number' && Math.abs(a.off - o) > 0.0005) { a.off = o; moved = true; }
+    if (!keep['label' + i] && typeof l === 'string' && l && a.label !== l) { a.label = l; moved = true; }
+    if (!keep['gap' + i] && a.ready && a.kind === 'yt' && a.src.parts && Array.isArray(g)) g.forEach((x, k) => { const pt = a.src.parts[k]; if (pt && typeof x === 'number' && (pt.gap || 0) !== x) { pt.gap = x; a.dur = a.src.total(); moved = true; } });
+  });
+  if (moved && !quiet) { render(); renderPanel(); seekAll(S.t); }
+}
+// keep this browser's copy without sending anything back
+function saveLocalOnly() { const f = scheduleLive; scheduleLive = () => {}; try { save(); } finally { scheduleLive = f; } }
+function setLiveNote(t) { const e = $('#liveNote'); if (!e) return; e.textContent = t; e.hidden = !t; }
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (typingInList()) return;
+  if (S.liveDeferred) applyLive(S.liveDeferred);
+  else if (S.notesDirty) { S.notesDirty = false; renderMarkers(); }
+}, 50));
 function startNotes() {
   renderNotebox();
   clearInterval(notesTimer);
   if (!S.board) return;
-  notesTimer = setInterval(pullNotes, 25000); // others' memos show up within about half a minute
+  notesTimer = setInterval(pullNotes, 20000); // others' memos and edits show up within about 20 seconds
   pullNotes();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pullNotes(); });
