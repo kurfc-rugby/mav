@@ -331,6 +331,22 @@ body.theater-on .mbar{display:none!important}
 .tdrow .chip.cm{--c:#e8dcc0}
 .tdrow .tx{color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .tdrow .tx b{color:var(--fg);font-weight:600}
+/* phones: a narrower list (about a third of the screen); text goes under the time and tag */
+@media (pointer:coarse) and (max-height:520px), (pointer:coarse) and (max-width:700px){
+  .app.theater.drawer{--dw:min(240px,32vw)}
+  .app.theater.drawer .tdrawer{padding-left:6px;padding-right:calc(6px + env(safe-area-inset-right,0px));gap:4px}
+  .tdhead{font-size:12px;gap:6px}
+  .tdhead span{display:none}
+  .tdhead button{min-height:32px;padding:0 10px;font-size:12px}
+  .tdrawer .filters{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;gap:3px}
+  .tdrawer .filters .sep{display:none}
+  .tdrawer .filters button{flex:none;font-size:10px;padding:2px 7px}
+  .tdrow{grid-template-columns:auto minmax(0,1fr);gap:2px 5px;padding:4px 3px;min-height:30px;font-size:11px}
+  .tdrow .mt{font-size:11px}
+  .tdrow .chip{font-size:10px;padding:0 4px;justify-self:start}
+  .tdrow .tx{grid-column:1 / -1;-webkit-line-clamp:2;font-size:11px}
+  .tdrow .tx:empty{display:none}
+}
 .tctl .prog{position:relative;height:24px;touch-action:none;cursor:pointer}
 .tctl .prog i{position:absolute;left:0;right:0;top:10px;height:4px;border-radius:2px;background:#fff4}
 .tctl .prog b{position:absolute;left:0;top:10px;height:4px;border-radius:2px;background:var(--tally)}
