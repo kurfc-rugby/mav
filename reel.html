@@ -57,6 +57,8 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
 .team.op{background:var(--op)}
 .row .note{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .warn{color:#f0c36b;font-size:12px;padding:8px 10px;line-height:1.6}
+.rec{position:absolute;right:8px;bottom:8px;z-index:3;background:#c0202ad0;color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px;pointer-events:none}
+#rec.on{background:#c0202a;border-color:#ff6b74;color:#fff}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:8px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.show{opacity:1}
 @media (max-width:900px){
@@ -76,7 +78,8 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
     <span class="grow"></span><a class="btn" id="back" href="./">マルチアングルへ</a>
   </header>
   <div class="left">
-    <div class="player">
+    <div class="player" id="playerBox">
+      <div class="rec" id="recBadge" hidden>● 録画中</div>
       <div id="yt"></div>
       <div class="cap" id="cap" hidden><span class="n" id="capN"></span><span id="capM"></span><span id="capT"></span></div>
       <div class="msg" id="msg">読み込み中…</div>
@@ -96,6 +99,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
       <span class="k">秒後まで</span>
       <button class="btn" id="loop">くり返し：オフ</button>
       <button class="btn" id="copy">このまとめのリンクをコピー</button>
+      <button class="btn" id="rec" hidden>● 動画ファイルに保存</button>
     </div>
   </div>
   <aside>
@@ -270,7 +274,7 @@ function cue(i) {
 }
 function go(i, play = true) {
   if (!st.clips.length) return;
-  if (i >= st.clips.length) { if (st.loop) i = 0; else { stop(); toast('最後の場面まで見ました'); return; } }
+  if (i >= st.clips.length) { if (st.loop && !rec) i = 0; else { stop(); if (rec) finishRec(); else toast('最後の場面まで見ました'); return; } }
   if (i < 0) i = 0;
   const c = st.clips[i]; st.idx = i; caption(c); markCur(); endT = c.e;
   if (!ready) return;
@@ -290,6 +294,7 @@ window.onYouTubeIframeAPIReady = () => {
     events: {
       onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); },
       onStateChange: e => {
+        if (rec) { try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
         if (e.data === 1) { $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
         if (e.data === 2 && playing && now() - lastJump > 800) { playing = false; setPlayIcon(); }
         if (e.data === 0 && playing) next();   // reached the end of this clip
@@ -336,6 +341,58 @@ document.addEventListener('keydown', e => {
   else if (e.code === 'ArrowLeft' || e.code === 'KeyP') $('#prev').click();
   else if (e.code === 'KeyR') $('#again').click();
 });
+
+/* ---------- save the collection as one video file (records this tab's player while it plays every scene) ---------- */
+// only the moments a scene is actually playing are recorded: loading, pauses and anything YouTube shows in between are skipped
+let rec = null, recChunks = [], recStream = null, recType = '';
+const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder) && !PHONE;
+if (canRec) $('#rec').hidden = false;
+function pickType() {
+  for (const t of ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'])
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+async function startRec() {
+  if (!ready || !st.clips.length) return;
+  toast('「このタブを共有」を選んで「共有」を押してください', 6000);
+  try {
+    recStream = await navigator.mediaDevices.getDisplayMedia({video: {displaySurface: 'browser', frameRate: 30}, audio: true,
+      preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'});
+  } catch (e) { toast('録画を始められませんでした（共有が選ばれませんでした）', 3500); return; }
+  const track = recStream.getVideoTracks()[0];
+  // keep only the video area, not the whole page
+  try { if (window.CropTarget && track.cropTo) await track.cropTo(await CropTarget.fromElement($('#playerBox'))); } catch (e) {}
+  recType = pickType(); recChunks = [];
+  try { rec = new MediaRecorder(recStream, recType ? {mimeType: recType, videoBitsPerSecond: 8e6} : undefined); } catch (e) { rec = new MediaRecorder(recStream); recType = rec.mimeType; }
+  rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = saveRec;
+  track.addEventListener('ended', () => { if (rec && rec.state !== 'inactive') finishRec(); });
+  rec.start(1000); rec.pause();
+  st.loop = false; st.muted = false; applyAudio();
+  $('#recBadge').hidden = false; $('#rec').classList.add('on'); $('#rec').textContent = '■ 録画をやめて保存';
+  document.querySelectorAll('#prev,#next,#again,#play,#pre,#post').forEach(b => { b.disabled = true; });
+  lastJump = now(); go(0, true);
+}
+function finishRec() {
+  if (!rec) return;
+  try { if (rec.state !== 'inactive') rec.stop(); } catch (e) { saveRec(); }
+  try { recStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  stop();
+}
+function saveRec() {
+  const r = rec; rec = null;
+  $('#recBadge').hidden = true; $('#rec').classList.remove('on'); $('#rec').textContent = '● 動画ファイルに保存';
+  document.querySelectorAll('#prev,#next,#again,#play,#pre,#post').forEach(b => { b.disabled = false; });
+  if (!r || !recChunks.length) return;
+  const type = (r.mimeType || recType || 'video/webm').split(';')[0], ext = type.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(recChunks, {type}); recChunks = [];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${$('#title').textContent}${st.team ? '_' + st.team : ''}_${st.clips.length}場面.${ext}`.replace(/[\\/:*?"<>|]/g, '_');
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+  toast(`保存しました（${ext.toUpperCase()}・${Math.round(blob.size / 1048576)}MB）。ダウンロードフォルダを見てください`, 6000);
+}
+$('#rec').addEventListener('click', () => { rec ? finishRec() : startRec(); });
 
 /* ---------- start ---------- */
 (async () => {
