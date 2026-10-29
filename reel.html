@@ -65,6 +65,7 @@ body.recording .player{position:fixed;left:50%;top:50%;transform:translate(-50%,
 body.recording .cap{left:auto;right:auto;top:auto;bottom:3%;left:2%;gap:8px}
 body.recording .cap span{font-size:calc(var(--rh) * .028);padding:.25em .6em;background:#000a}
 body.recording .msg{display:none}
+body.recording .toast{z-index:60;top:8px;bottom:auto;transition:none}
 body.recording .recnote{position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:60}
 #rec.on{background:#c0202a;border-color:#ff6b74;color:#fff}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:8px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
@@ -291,6 +292,22 @@ function go(i, play = true) {
     else player.cueVideoById({videoId: c.vid, startSeconds: c.s, endSeconds: c.e});
   } catch (e) {}
   if (play) { playing = true; setPlayIcon(); }
+  if (play && rec) armKick();
+}
+// while recording, a freshly made player may be refused autoplay with sound: nudge it, then ask for one click on the video
+let kickT = 0;
+function armKick() {
+  clearTimeout(kickT);
+  kickT = setTimeout(() => {
+    if (!rec || !playing) return;
+    let s = -1; try { s = player.getPlayerState(); } catch (e) {}
+    if (s === 1 || s === 3) return;
+    try { player.playVideo(); } catch (e) {}
+    kickT = setTimeout(() => {
+      let s2 = -1; try { s2 = player.getPlayerState(); } catch (e) {}
+      if (rec && playing && s2 !== 1 && s2 !== 3) toast('映像の上を1回クリックすると録画が始まります（止まっている間は録画されません）', 8000);
+    }, 2500);
+  }, 3000);
 }
 function stop() { playing = false; try { player.pauseVideo(); } catch (e) {} setPlayIcon(); }
 function setPlayIcon() { $('#play').textContent = playing ? '❚❚ 停止' : '▶ 再生'; }
@@ -309,7 +326,7 @@ function makePlayer(controls) {
       onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); res(); },
       onStateChange: e => {
         if (rec) { try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
-        if (e.data === 1) { $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
+        if (e.data === 1) { clearTimeout(kickT); if (rec) $('#toast').classList.remove('show'); $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
         if (e.data === 2 && playing && now() - lastJump > 800) { playing = false; setPlayIcon(); }
         if (e.data === 0 && playing && now() - lastJump > 1500) next();   // reached the end of this clip
       },
