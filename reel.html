@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KURFC 場面集</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#121012; --panel:#1a1719; --raise:#252125; --raise2:#2f2a2e; --line:#363035; --fg:#ece6e7; --muted:#a2969a;
+  --enji:#6f3036; --enji-hi:#c25563; --op:#3d5a7e;
+  --body:'Noto Sans JP',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px}
+button,select,input{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:12px 16px;height:100dvh}
+header{grid-column:1 / -1;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{background:var(--enji);color:#fff;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:3px}
+h1{font-size:16px;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:12px}
+.left{display:flex;flex-direction:column;gap:10px;min-height:0}
+.player{position:relative;background:#000;border:1px solid var(--line);border-radius:6px;overflow:hidden;aspect-ratio:16/9;max-height:calc(100dvh - 210px);width:100%}
+.player iframe,#yt{position:absolute;inset:0;width:100%;height:100%}
+.cap{position:absolute;left:8px;top:8px;right:8px;display:flex;gap:6px;align-items:center;pointer-events:none;z-index:2}
+.cap span{background:#000b;border-radius:3px;padding:2px 7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cap .n{flex:none}
+.cap #capM{flex:0 1 auto}
+.cap #capT{flex:0 0 auto}
+.cap .n{background:var(--enji)}
+.msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;color:var(--muted);line-height:1.8;z-index:1}
+.bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+a.btn{text-decoration:none;color:var(--fg)}
+.btn{background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--raise2)}
+.btn.pri{background:var(--enji);border-color:var(--enji-hi);color:#fff}
+.btn.on{border-color:var(--enji-hi);background:color-mix(in srgb,var(--enji) 45%,var(--raise))}
+.bar .k{color:var(--muted);font-size:12px}
+select{background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:5px 6px}
+.grow{flex:1}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.filters{padding:10px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chips button{background:none;border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--muted);cursor:pointer}
+.chips button.on{border-color:var(--enji-hi);color:var(--fg);background:var(--raise)}
+.list{overflow:auto;flex:1;min-height:0;padding:6px}
+.grp{font-size:11px;color:var(--muted);margin:10px 4px 4px;display:flex;justify-content:space-between;gap:6px}
+.grp a{color:var(--muted)}
+.row{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:4px;padding:6px;cursor:pointer;font-size:12px}
+.row:hover{background:var(--raise)}
+.row.cur{background:color-mix(in srgb,var(--enji) 40%,transparent)}
+.row .no{color:var(--muted);font-family:var(--mono);font-size:11px;min-width:2.2em}
+.row .t{font-family:var(--mono)}
+.team{display:inline-block;font-size:10px;padding:0 6px;border-radius:8px;color:#fff;background:var(--enji);max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:-2px}
+.team.op{background:var(--op)}
+.row .note{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn{color:#f0c36b;font-size:12px;padding:8px 10px;line-height:1.6}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:8px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+@media (max-width:900px){
+  .cap span{font-size:11px;padding:1px 5px}
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;height:auto;padding:10px 12px}
+  .player{max-height:none}
+  aside{max-height:none}
+  .list{max-height:none;overflow:visible}
+  .btn{padding:8px 10px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="brand">KURFC</span><h1 id="title">場面集</h1><span class="sub" id="subtitle">読み込み中…</span>
+    <span class="grow"></span><a class="btn" id="back" href="./">マルチアングルへ</a>
+  </header>
+  <div class="left">
+    <div class="player">
+      <div id="yt"></div>
+      <div class="cap" id="cap" hidden><span class="n" id="capN"></span><span id="capM"></span><span id="capT"></span></div>
+      <div class="msg" id="msg">読み込み中…</div>
+    </div>
+    <div class="bar">
+      <button class="btn" id="prev">◀ 前</button>
+      <button class="btn pri" id="play">▶ 再生</button>
+      <button class="btn" id="next">次 ▶</button>
+      <button class="btn" id="again">もう一度</button>
+      <span class="grow"></span>
+      <button class="btn" id="mute">音あり</button>
+      <select id="rate" aria-label="速さ"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+    </div>
+    <div class="bar">
+      <span class="k">タグの</span><select id="pre" aria-label="何秒前から"><option>0</option><option>2</option><option selected>3</option><option>5</option><option>8</option><option>10</option></select>
+      <span class="k">秒前〜</span><select id="post" aria-label="何秒後まで"><option>5</option><option>8</option><option>10</option><option selected>12</option><option>15</option><option>20</option><option>30</option></select>
+      <span class="k">秒後まで</span>
+      <button class="btn" id="loop">くり返し：オフ</button>
+      <button class="btn" id="copy">このまとめのリンクをコピー</button>
+    </div>
+  </div>
+  <aside>
+    <div class="filters">
+      <div class="chips" id="tagChips"></div>
+      <div class="chips" id="teamChips"></div>
+      <div class="chips" id="matchChips"></div>
+    </div>
+    <div class="warn" id="warn" hidden></div>
+    <div class="list" id="list"></div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(() => {
+'use strict';
+const UA = navigator.userAgent || '';
+const IN_LINE = /\bLine\//i.test(UA);
+if (IN_LINE && !/[?&]openExternalBrowser=1/.test(location.search)) {
+  try { const u = new URL(location.href); u.searchParams.set('openExternalBrowser', '1'); location.replace(u.toString()); } catch (e) {}
+}
+const API = 'https://script.google.com/macros/s/AKfycbyfp8GhO4q6lDGW19aJyqEpO2-Um5w13m4ndkVPssk4Sn-ziK0VnToY_S_bThr-5Qm1/exec';
+const TAGS = {try: 'トライ', scrum: 'スクラム', lineout: 'ラインアウト', pen: 'ペナルティ', kick: 'キック', memo: 'メモ'};
+const PHONE = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmt = t => { t = Math.max(0, t); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t % 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
+let toastT = 0;
+const toast = (m, ms = 2200) => { const e = $('#toast'); e.textContent = m; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), ms); };
+
+/* ---------- what to collect: #from=ID,ID,…&tag=lineout&pre=3&post=12 ---------- */
+const P = new URLSearchParams(location.hash.slice(1));
+const FROM = (P.get('from') || '').split(',').filter(x => /^[A-Za-z0-9]{4,12}$/.test(x));
+const st = {tags: (P.get('tag') || 'lineout').split(',').filter(k => TAGS[k]), pre: +P.get('pre') || 3, post: +P.get('post') || 12,
+  team: P.get('team') || '', off: new Set(), loop: false, muted: PHONE, rate: 1, idx: -1, clips: [], all: [], matches: []};
+if (P.get('pre') === '0') st.pre = 0;
+$('#pre').value = String(st.pre); $('#post').value = String(st.post);
+
+/* ---------- read each analysis (its link + the tags everyone has added since) ---------- */
+const unb64u = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/')); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+async function decodeShare(str) {
+  let bytes = unb64u(str.slice(1));
+  if (str[0] === 'z') bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+async function loadMatch(id) {
+  const j = await (await fetch(API + '?k=' + id)).json();
+  if (!j || !j.d) throw new Error('not found');
+  const d = await decodeShare(j.d), live = j.live || null, kv = (live && live.kv) || {};
+  const slots = (d.s || []).map(x => x ? {k: x[0], id: x[1], label: x[2], off: +x[3] || 0, durs: x[4], gaps: x[5]} : null);
+  const map = []; let n = 0; slots.forEach((p, i) => { map[i] = p ? n++ : null; });
+  const angles = slots.filter(Boolean).map((a, i) => ({...a,
+    off: typeof kv['off' + i] === 'number' ? kv['off' + i] : a.off,
+    label: typeof kv['label' + i] === 'string' && kv['label' + i] ? kv['label' + i] : a.label,
+    gaps: Array.isArray(kv['gap' + i]) ? kv['gap' + i] : a.gaps}));
+  const tags = live
+    ? Object.values(live.tags || {}).filter(t => t && !t.del).map(t => ({t: +t.t, tag: t.tag, side: t.side || '', cam: t.cam, note: t.note || ''}))
+    : (d.m || []).map(x => ({t: x[0], tag: x[1], note: x[2] || '', cam: x[3] < 0 || map[x[3]] == null ? null : map[x[3]], side: x[6] || ''}));
+  const teams = Array.isArray(kv.teams) ? kv.teams : Array.isArray(d.tm) ? d.tm : ['', ''];
+  return {id, title: (typeof kv.title === 'string' && kv.title) || d.n || id, angles, tags,
+    teams: [teams[0] || '自チーム', teams[1] || '相手']};
+}
+// where a tag is inside a YouTube video (an angle may be 前半+後半 joined: "id1+id2")
+function place(a, v) {
+  const ids = String(a.id).split('+');
+  if (ids.length < 2) return {vid: ids[0], t: v, max: Infinity};
+  const durs = Array.isArray(a.durs) ? a.durs.map(Number) : null;
+  if (!durs || durs.length !== ids.length || durs.some(x => !(x > 0))) return {vid: ids[0], t: v, max: Infinity, guess: true};
+  const gaps = Array.isArray(a.gaps) ? a.gaps.map(Number) : [];
+  let start = 0, k = 0; const starts = [0];
+  for (let i = 1; i < ids.length; i++) { start += durs[i - 1] + (gaps[i] || 0); starts.push(start); }
+  for (let i = 1; i < ids.length; i++) if (v >= starts[i] - 0.05) k = i;
+  return {vid: ids[k], t: Math.max(0, v - starts[k]), max: durs[k], part: k};
+}
+function buildClips() {
+  const out = [];
+  st.matches.forEach((m, mi) => {
+    if (st.off.has(m.id)) return;
+    m.tags.filter(t => st.tags.includes(t.tag)).sort((a, b) => a.t - b.t).forEach(t => {
+      const team = t.side === 'us' ? m.teams[0] : t.side === 'op' ? m.teams[1] : '';
+      if (st.team && team !== st.team) return;
+      let a = t.cam != null && m.angles[t.cam] && m.angles[t.cam].k === 'y' ? m.angles[t.cam] : m.angles.find(x => x.k === 'y');
+      if (!a) return;
+      const p = place(a, t.t + (a.off || 0));
+      out.push({m, mi, tag: t, team, side: t.side, angle: a.label, vid: p.vid, s: Math.max(0, p.t - st.pre), e: Math.min(p.max, p.t + st.post), at: p.t, guess: p.guess});
+    });
+  });
+  return out;
+}
+
+/* ---------- list and filters ---------- */
+function chip(box, label, on, onClick, cls) {
+  const b = document.createElement('button'); b.textContent = label; b.classList.toggle('on', on); if (cls) b.className += ' ' + cls;
+  b.addEventListener('click', onClick); box.appendChild(b);
+}
+function renderFilters() {
+  const tb = $('#tagChips'); tb.innerHTML = '';
+  Object.keys(TAGS).filter(k => k !== 'memo').forEach(k => {
+    const n = st.matches.reduce((s, m) => s + m.tags.filter(t => t.tag === k).length, 0);
+    if (!n) return;
+    chip(tb, `${TAGS[k]} ${n}`, st.tags.includes(k), () => {
+      st.tags = st.tags.includes(k) ? st.tags.filter(x => x !== k) : st.tags.concat(k);
+      if (!st.tags.length) st.tags = [k];
+      refresh();
+    });
+  });
+  const teams = [...new Set(st.matches.flatMap(m => m.teams))];
+  const nb = $('#teamChips'); nb.innerHTML = '';
+  chip(nb, '両チーム', !st.team, () => { st.team = ''; refresh(); });
+  teams.forEach(tn => chip(nb, tn, st.team === tn, () => { st.team = st.team === tn ? '' : tn; refresh(); }));
+  const mb = $('#matchChips'); mb.innerHTML = '';
+  st.matches.forEach(m => chip(mb, m.title, !st.off.has(m.id), () => { st.off.has(m.id) ? st.off.delete(m.id) : st.off.add(m.id); if (st.off.size === st.matches.length) st.off.delete(m.id); refresh(); }));
+}
+function renderList() {
+  const box = $('#list'); box.innerHTML = '';
+  let last = null;
+  st.clips.forEach((c, i) => {
+    if (c.m !== last) {
+      last = c.m;
+      const g = document.createElement('div'); g.className = 'grp';
+      const n = st.clips.filter(x => x.m === c.m).length;
+      g.innerHTML = `<span>${esc(c.m.title)}（${n}）</span><a href="./?openExternalBrowser=1#k=${esc(c.m.id)}" target="_blank" rel="noopener">試合を開く</a>`;
+      box.appendChild(g);
+    }
+    const b = document.createElement('button'); b.className = 'row'; b.dataset.i = i;
+    b.innerHTML = `<span class="no">${i + 1}</span><span class="t">${fmt(c.tag.t)}</span><span class="note">${esc(TAGS[c.tag.tag] || '')} ${c.team ? `<span class="team ${c.side === 'op' ? 'op' : ''}">${esc(c.team)}</span>` : ''} ${esc(c.tag.note)}</span>`;
+    b.addEventListener('click', () => go(i, true));
+    box.appendChild(b);
+  });
+  if (!st.clips.length) box.innerHTML = '<p class="sub" style="padding:10px">この条件の場面はありません。</p>';
+  markCur();
+}
+function markCur() {
+  document.querySelectorAll('.row').forEach(r => r.classList.toggle('cur', +r.dataset.i === st.idx));
+  const r = document.querySelector('.row.cur'); if (r) r.scrollIntoView({block: 'nearest'});
+}
+function refresh() {
+  const cur = st.clips[st.idx];
+  st.clips = buildClips();
+  renderFilters();
+  const names = st.tags.map(k => TAGS[k]).join('・');
+  $('#title').textContent = `${names}集`;
+  $('#subtitle').textContent = `${st.clips.length}場面・${st.matches.length - st.off.size}試合${st.team ? '・' + st.team : ''}`;
+  document.title = `${names}集 - KURFC`;
+  st.idx = cur ? st.clips.findIndex(c => c.m === cur.m && c.tag === cur.tag) : -1;
+  renderList();
+  if (st.idx < 0 && st.clips.length && player) cue(0);
+  writeHash();
+}
+function writeHash() {
+  const p = new URLSearchParams();
+  p.set('from', FROM.join(',')); p.set('tag', st.tags.join(','));
+  if (st.pre !== 3) p.set('pre', st.pre); if (st.post !== 12) p.set('post', st.post);
+  if (st.team) p.set('team', st.team);
+  try { history.replaceState(null, '', location.pathname + location.search + '#' + p.toString().replace(/%2C/g, ',')); } catch (e) {}
+}
+
+/* ---------- player: one YouTube player, clip after clip ---------- */
+let player = null, ready = false, playing = false, endT = 0;
+function caption(c) {
+  $('#cap').hidden = !c;
+  if (!c) return;
+  $('#capN').textContent = `${st.idx + 1} / ${st.clips.length}`;
+  $('#capM').textContent = c.m.title;
+  $('#capT').textContent = `${TAGS[c.tag.tag]}${c.team ? '（' + c.team + '）' : ''} ${fmt(c.tag.t)}`;
+}
+function cue(i) {
+  const c = st.clips[i]; if (!c || !ready) return;
+  st.idx = i; caption(c); markCur();
+  endT = c.e;
+  try { player.cueVideoById({videoId: c.vid, startSeconds: c.s, endSeconds: c.e}); } catch (e) {}
+}
+function go(i, play = true) {
+  if (!st.clips.length) return;
+  if (i >= st.clips.length) { if (st.loop) i = 0; else { stop(); toast('最後の場面まで見ました'); return; } }
+  if (i < 0) i = 0;
+  const c = st.clips[i]; st.idx = i; caption(c); markCur(); endT = c.e;
+  if (!ready) return;
+  try {
+    if (play) player.loadVideoById({videoId: c.vid, startSeconds: c.s, endSeconds: c.e});
+    else player.cueVideoById({videoId: c.vid, startSeconds: c.s, endSeconds: c.e});
+  } catch (e) {}
+  if (play) { playing = true; setPlayIcon(); }
+}
+function stop() { playing = false; try { player.pauseVideo(); } catch (e) {} setPlayIcon(); }
+function setPlayIcon() { $('#play').textContent = playing ? '❚❚ 停止' : '▶ 再生'; }
+function applyAudio() { try { st.muted ? player.mute() : player.unMute(); player.setPlaybackRate(st.rate); } catch (e) {} $('#mute').textContent = st.muted ? '音なし' : '音あり'; $('#mute').classList.toggle('on', st.muted); }
+window.onYouTubeIframeAPIReady = () => {
+  player = new YT.Player('yt', {
+    width: '100%', height: '100%',
+    playerVars: {playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, controls: 1, cc_load_policy: 0, origin: location.origin},
+    events: {
+      onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); },
+      onStateChange: e => {
+        if (e.data === 1) { $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
+        if (e.data === 2 && playing && now() - lastJump > 800) { playing = false; setPlayIcon(); }
+        if (e.data === 0 && playing) next();   // reached the end of this clip
+      },
+      onError: e => { toast(`この場面の動画を再生できません（エラー${e.data}）。次へ進みます`, 3000); if (playing) setTimeout(next, 1200); }
+    }
+  });
+};
+const now = () => performance.now();
+let lastJump = 0;
+function next() { lastJump = now(); go(st.idx + 1, true); }
+// YouTube sometimes keeps playing past the end time after a seek: watch the time too
+setInterval(() => {
+  if (!ready || !playing) return;
+  let t = 0, s = -1; try { t = player.getCurrentTime(); s = player.getPlayerState(); } catch (e) { return; }
+  if (s === 1 && t >= endT - 0.05 && now() - lastJump > 1500) next();
+}, 250);
+
+$('#play').addEventListener('click', () => {
+  if (!ready || !st.clips.length) return;
+  if (playing) { stop(); return; }
+  lastJump = now();
+  if (st.idx < 0) { go(0, true); return; }
+  const s = player.getPlayerState();
+  if (s === 5 || s === 0 || s === -1) go(st.idx, true); else { player.playVideo(); playing = true; setPlayIcon(); }
+});
+$('#next').addEventListener('click', () => { lastJump = now(); go(st.idx + 1, true); });
+$('#prev').addEventListener('click', () => { lastJump = now(); go(Math.max(0, st.idx - 1), true); });
+$('#again').addEventListener('click', () => { lastJump = now(); go(Math.max(0, st.idx), true); });
+$('#mute').addEventListener('click', () => { st.muted = !st.muted; applyAudio(); });
+$('#rate').addEventListener('change', e => { st.rate = +e.target.value; applyAudio(); });
+$('#loop').addEventListener('click', () => { st.loop = !st.loop; $('#loop').textContent = `くり返し：${st.loop ? 'オン' : 'オフ'}`; $('#loop').classList.toggle('on', st.loop); });
+$('#pre').addEventListener('change', e => { st.pre = +e.target.value; refresh(); });
+$('#post').addEventListener('change', e => { st.post = +e.target.value; refresh(); });
+$('#copy').addEventListener('click', () => {
+  const url = location.origin + location.pathname + '?openExternalBrowser=1' + location.hash;
+  const text = `【KURFC 場面集】${$('#title').textContent}（${$('#subtitle').textContent}）\n${url}`;
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast('リンクをコピーしました。LINEなどに貼って送れます'), () => prompt('このリンクをコピーしてください', url));
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches && e.target.matches('input,select,textarea')) return;
+  if (e.code === 'Space' || e.code === 'KeyK') { e.preventDefault(); $('#play').click(); }
+  else if (e.code === 'ArrowRight' || e.code === 'KeyN') $('#next').click();
+  else if (e.code === 'ArrowLeft' || e.code === 'KeyP') $('#prev').click();
+  else if (e.code === 'KeyR') $('#again').click();
+});
+
+/* ---------- start ---------- */
+(async () => {
+  if (!FROM.length) { $('#msg').innerHTML = 'まとめる試合が指定されていません。'; $('#subtitle').textContent = ''; return; }
+  const res = await Promise.all(FROM.map(id => loadMatch(id).catch(() => null)));
+  st.matches = res.filter(Boolean);
+  const bad = FROM.filter((id, i) => !res[i]);
+  if (bad.length) { $('#warn').hidden = false; $('#warn').textContent = `読み込めなかった試合があります（${bad.join(', ')}）。`; }
+  const guess = st.matches.some(m => m.angles.some(a => String(a.id).includes('+') && !(Array.isArray(a.durs) && a.durs.length)));
+  if (guess) { $('#warn').hidden = false; $('#warn').textContent += '前半・後半をつないだ動画の長さが分からない試合は、場面の位置がずれることがあります。'; }
+  st.clips = buildClips();
+  refresh();
+  $('#msg').innerHTML = st.clips.length ? '▶ 再生 を押すと、場面を順番に再生します' : 'この条件の場面はありません';
+  if (st.clips.length) { st.idx = 0; caption(st.clips[0]); markCur(); }
+  const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+})().catch(() => { $('#msg').textContent = '読み込めませんでした。電波の良い所で開き直してください。'; });
+})();
+</script>
+</body>
+</html>
