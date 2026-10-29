@@ -392,6 +392,11 @@ function pickType() {
     if (MediaRecorder.isTypeSupported(t)) return t;
   return '';
 }
+// sharing a tab adds Chrome's "sharing this tab" bar and makes the page shorter: keep the video box fully inside the window
+function recFit() {
+  const w = Math.floor(Math.min(innerWidth, (innerHeight - 26) * 16 / 9)), h = Math.floor(w * 9 / 16);
+  document.documentElement.style.setProperty('--rw', w + 'px'); document.documentElement.style.setProperty('--rh', h + 'px');
+}
 async function startRec() {
   if (!ready || !st.clips.length) return;
   toast('「このタブを共有」を選んで「共有」を押してください', 6000);
@@ -401,8 +406,7 @@ async function startRec() {
   } catch (e) { toast('録画を始められませんでした（共有が選ばれませんでした）', 3500); return; }
   const track = recStream.getVideoTracks()[0];
   // the video alone, 16:9, filling the window; YouTube's own buttons and bar switched off
-  const w = Math.floor(Math.min(innerWidth, (innerHeight - 26) * 16 / 9)), h = Math.floor(w * 9 / 16);
-  document.documentElement.style.setProperty('--rw', w + 'px'); document.documentElement.style.setProperty('--rh', h + 'px');
+  recFit(); addEventListener('resize', recFit);
   document.body.classList.add('recording'); window.scrollTo(0, 0);
   stop(); await makePlayer(false);
   // keep only the video area, not the whole page
@@ -441,7 +445,7 @@ function finishRec() {
 }
 function saveRec() {
   const r = rec; rec = null;
-  document.body.classList.remove('recplay');
+  document.body.classList.remove('recplay'); removeEventListener('resize', recFit);
   if (document.body.classList.contains('recording')) { document.body.classList.remove('recording'); makePlayer(true); }
   $('#recBadge').hidden = true; $('#rec').classList.remove('on'); $('#rec').textContent = '● 動画ファイルに保存';
   document.querySelectorAll('#prev,#next,#again,#play,#pre,#post').forEach(b => { b.disabled = false; });
