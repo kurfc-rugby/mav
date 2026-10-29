@@ -297,7 +297,7 @@ window.onYouTubeIframeAPIReady = () => {
         if (rec) { try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
         if (e.data === 1) { $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
         if (e.data === 2 && playing && now() - lastJump > 800) { playing = false; setPlayIcon(); }
-        if (e.data === 0 && playing) next();   // reached the end of this clip
+        if (e.data === 0 && playing && now() - lastJump > 1500) next();   // reached the end of this clip
       },
       onError: e => { toast(`この場面の動画を再生できません（エラー${e.data}）。次へ進みます`, 3000); if (playing) setTimeout(next, 1200); }
     }
@@ -305,7 +305,7 @@ window.onYouTubeIframeAPIReady = () => {
 };
 const now = () => performance.now();
 let lastJump = 0;
-function next() { lastJump = now(); go(st.idx + 1, true); }
+function next() { if (now() - lastJump < 1200) return; lastJump = now(); go(st.idx + 1, true); }
 // YouTube sometimes keeps playing past the end time after a seek: watch the time too
 setInterval(() => {
   if (!ready || !playing) return;
