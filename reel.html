@@ -61,12 +61,14 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
 /* while recording: the video alone, exactly 16:9, as large as the window allows (only this box goes into the file) */
 body.recording{overflow:hidden}
 body.recording::before{content:'';position:fixed;inset:0;background:#000;z-index:40}
-body.recording .player{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:var(--rw);height:var(--rh);max-height:none;aspect-ratio:auto;z-index:50;border:0;border-radius:0}
-body.recording .cap{left:auto;right:auto;top:auto;bottom:3%;left:2%;gap:8px}
+body.recording .player{position:fixed;left:50%;top:calc(50% + 13px);transform:translate(-50%,-50%);width:var(--rw);height:var(--rh);max-height:none;aspect-ratio:auto;z-index:50;border:0;border-radius:0}
+body.recording .cap{left:auto;right:auto;top:auto;bottom:3%;left:2%;gap:8px;z-index:3}
 body.recording .cap span{font-size:calc(var(--rh) * .028);padding:.25em .6em;background:#000a}
 body.recording .msg{display:none}
+.shield{display:none}
+body.recording .shield{display:block;position:absolute;inset:0;z-index:2;cursor:none}
 body.recording .toast{z-index:60;top:8px;bottom:auto;transition:none}
-body.recording .recnote{position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:60}
+body.recording .recnote{position:fixed;left:50%;top:5px;white-space:nowrap;transform:translateX(-50%);z-index:60}
 #rec.on{background:#c0202a;border-color:#ff6b74;color:#fff}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:8px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.show{opacity:1}
@@ -91,6 +93,7 @@ body.recording .recnote{position:fixed;left:50%;top:6px;transform:translateX(-50
       <div id="yt"></div>
       <div class="cap" id="cap" hidden><span class="n" id="capN"></span><span id="capM"></span><span id="capT"></span></div>
       <div class="msg" id="msg">読み込み中…</div>
+      <div class="shield" id="shield"></div>
     </div>
     <div class="bar">
       <button class="btn" id="prev">◀ 前</button>
@@ -305,7 +308,7 @@ function armKick() {
     try { player.playVideo(); } catch (e) {}
     kickT = setTimeout(() => {
       let s2 = -1; try { s2 = player.getPlayerState(); } catch (e) {}
-      if (rec && playing && s2 !== 1 && s2 !== 3) toast('映像の上を1回クリックすると録画が始まります（止まっている間は録画されません）', 8000);
+      if (rec && playing && s2 !== 1 && s2 !== 3) toast('映像の上を1回クリックすると続きが始まります（止まっている間は録画されません）', 8000);
     }, 2500);
   }, 3000);
 }
@@ -389,12 +392,12 @@ async function startRec() {
   if (!ready || !st.clips.length) return;
   toast('「このタブを共有」を選んで「共有」を押してください', 6000);
   try {
-    recStream = await navigator.mediaDevices.getDisplayMedia({video: {displaySurface: 'browser', frameRate: 30}, audio: true,
+    recStream = await navigator.mediaDevices.getDisplayMedia({video: {displaySurface: 'browser', frameRate: 30, cursor: 'never'}, audio: true,
       preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'});
   } catch (e) { toast('録画を始められませんでした（共有が選ばれませんでした）', 3500); return; }
   const track = recStream.getVideoTracks()[0];
   // the video alone, 16:9, filling the window; YouTube's own buttons and bar switched off
-  const w = Math.floor(Math.min(innerWidth, innerHeight * 16 / 9)), h = Math.floor(w * 9 / 16);
+  const w = Math.floor(Math.min(innerWidth, (innerHeight - 26) * 16 / 9)), h = Math.floor(w * 9 / 16);
   document.documentElement.style.setProperty('--rw', w + 'px'); document.documentElement.style.setProperty('--rh', h + 'px');
   document.body.classList.add('recording'); window.scrollTo(0, 0);
   stop(); await makePlayer(false);
@@ -443,6 +446,7 @@ function saveRec() {
   toast(`保存しました（${ext.toUpperCase()}・${Math.round(blob.size / 1048576)}MB）。ダウンロードフォルダを見てください`, 6000);
 }
 $('#rec').addEventListener('click', () => { rec ? finishRec() : startRec(); });
+$('#shield').addEventListener('click', () => { try { player.playVideo(); } catch (e) {} });
 
 /* ---------- start ---------- */
 (async () => {
