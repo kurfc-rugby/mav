@@ -57,7 +57,15 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
 .team.op{background:var(--op)}
 .row .note{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .warn{color:#f0c36b;font-size:12px;padding:8px 10px;line-height:1.6}
-.rec{position:absolute;right:8px;bottom:8px;z-index:3;background:#c0202ad0;color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px;pointer-events:none}
+.recnote{color:#ff6b74;font-weight:700;font-size:12px}
+/* while recording: the video alone, exactly 16:9, as large as the window allows (only this box goes into the file) */
+body.recording{overflow:hidden}
+body.recording::before{content:'';position:fixed;inset:0;background:#000;z-index:40}
+body.recording .player{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:var(--rw);height:var(--rh);max-height:none;aspect-ratio:auto;z-index:50;border:0;border-radius:0}
+body.recording .cap{left:auto;right:auto;top:auto;bottom:3%;left:2%;gap:8px}
+body.recording .cap span{font-size:calc(var(--rh) * .028);padding:.25em .6em;background:#000a}
+body.recording .msg{display:none}
+body.recording .recnote{position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:60}
 #rec.on{background:#c0202a;border-color:#ff6b74;color:#fff}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:8px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.show{opacity:1}
@@ -79,7 +87,6 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
   </header>
   <div class="left">
     <div class="player" id="playerBox">
-      <div class="rec" id="recBadge" hidden>● 録画中</div>
       <div id="yt"></div>
       <div class="cap" id="cap" hidden><span class="n" id="capN"></span><span id="capM"></span><span id="capT"></span></div>
       <div class="msg" id="msg">読み込み中…</div>
@@ -100,6 +107,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
       <button class="btn" id="loop">くり返し：オフ</button>
       <button class="btn" id="copy">このまとめのリンクをコピー</button>
       <button class="btn" id="rec" hidden>● 動画ファイルに保存</button>
+      <span class="recnote" id="recBadge" hidden>● 録画中（このタブを開いたまま、触らずにお待ちください）</span>
     </div>
   </div>
   <aside>
@@ -287,12 +295,18 @@ function go(i, play = true) {
 function stop() { playing = false; try { player.pauseVideo(); } catch (e) {} setPlayIcon(); }
 function setPlayIcon() { $('#play').textContent = playing ? '❚❚ 停止' : '▶ 再生'; }
 function applyAudio() { try { st.muted ? player.mute() : player.unMute(); player.setPlaybackRate(st.rate); } catch (e) {} $('#mute').textContent = st.muted ? '音なし' : '音あり'; $('#mute').classList.toggle('on', st.muted); }
-window.onYouTubeIframeAPIReady = () => {
-  player = new YT.Player('yt', {
+function makePlayer(controls) {
+  return new Promise(res => {
+    if (player) { try { player.destroy(); } catch (e) {} }
+    ready = false;
+    const box = $('#playerBox'), old = document.getElementById('yt');
+    if (old) old.remove();
+    const div = document.createElement('div'); div.id = 'yt'; box.insertBefore(div, box.firstChild);
+    player = new YT.Player('yt', {
     width: '100%', height: '100%',
-    playerVars: {playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, controls: 1, cc_load_policy: 0, origin: location.origin},
+    playerVars: {playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, controls: controls ? 1 : 0, disablekb: controls ? 0 : 1, fs: controls ? 1 : 0, cc_load_policy: 0, origin: location.origin},
     events: {
-      onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); },
+      onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); res(); },
       onStateChange: e => {
         if (rec) { try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
         if (e.data === 1) { $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
@@ -301,8 +315,10 @@ window.onYouTubeIframeAPIReady = () => {
       },
       onError: e => { toast(`この場面の動画を再生できません（エラー${e.data}）。次へ進みます`, 3000); if (playing) setTimeout(next, 1200); }
     }
+    });
   });
-};
+}
+window.onYouTubeIframeAPIReady = () => { makePlayer(true); };
 const now = () => performance.now();
 let lastJump = 0;
 function next() { if (now() - lastJump < 1200) return; lastJump = now(); go(st.idx + 1, true); }
@@ -360,6 +376,11 @@ async function startRec() {
       preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'});
   } catch (e) { toast('録画を始められませんでした（共有が選ばれませんでした）', 3500); return; }
   const track = recStream.getVideoTracks()[0];
+  // the video alone, 16:9, filling the window; YouTube's own buttons and bar switched off
+  const w = Math.floor(Math.min(innerWidth, innerHeight * 16 / 9)), h = Math.floor(w * 9 / 16);
+  document.documentElement.style.setProperty('--rw', w + 'px'); document.documentElement.style.setProperty('--rh', h + 'px');
+  document.body.classList.add('recording'); window.scrollTo(0, 0);
+  stop(); await makePlayer(false);
   // keep only the video area, not the whole page
   try { if (window.CropTarget && track.cropTo) await track.cropTo(await CropTarget.fromElement($('#playerBox'))); } catch (e) {}
   recType = pickType(); recChunks = [];
@@ -381,6 +402,7 @@ function finishRec() {
 }
 function saveRec() {
   const r = rec; rec = null;
+  if (document.body.classList.contains('recording')) { document.body.classList.remove('recording'); makePlayer(true); }
   $('#recBadge').hidden = true; $('#rec').classList.remove('on'); $('#rec').textContent = '● 動画ファイルに保存';
   document.querySelectorAll('#prev,#next,#again,#play,#pre,#post').forEach(b => { b.disabled = false; });
   if (!r || !recChunks.length) return;
