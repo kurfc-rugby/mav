@@ -66,7 +66,10 @@ body.recording .cap{left:auto;right:auto;top:auto;bottom:3%;left:2%;gap:8px;z-in
 body.recording .cap span{font-size:calc(var(--rh) * .028);padding:.25em .6em;background:#000a}
 body.recording .msg{display:none}
 .shield{display:none}
-body.recording .shield{display:block;position:absolute;inset:0;z-index:2;cursor:none}
+body.recording.recplay .shield{display:block;position:absolute;inset:0;z-index:2;cursor:none}
+/* the file should look like the YouTube video itself: no scene labels, nothing other extensions put on the page */
+body.recording .cap{display:none!important}
+body.recording > :not(.app):not(#toast), html:has(body.recording) > :not(head):not(body){display:none!important}
 body.recording .toast{z-index:60;top:8px;bottom:auto;transition:none}
 body.recording .recnote{position:fixed;left:50%;top:5px;white-space:nowrap;transform:translateX(-50%);z-index:60}
 #rec.on{background:#c0202a;border-color:#ff6b74;color:#fff}
@@ -328,7 +331,7 @@ function makePlayer(controls) {
     events: {
       onReady: () => { ready = true; applyAudio(); if (st.clips.length) cue(Math.max(0, st.idx)); res(); },
       onStateChange: e => {
-        if (rec) { try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
+        if (rec) { if (e.data === 1) document.body.classList.add('recplay'); try { if (e.data === 1) { if (rec.state === 'paused') rec.resume(); } else if (rec.state === 'recording') rec.pause(); } catch (err) {} }
         if (e.data === 1) { clearTimeout(kickT); if (rec) $('#toast').classList.remove('show'); $('#msg').hidden = true; applyAudio(); if (!playing) { playing = true; setPlayIcon(); } }
         if (e.data === 2 && playing && now() - lastJump > 800) { playing = false; setPlayIcon(); }
         if (e.data === 0 && playing && now() - lastJump > 1500) next();   // reached the end of this clip
@@ -384,7 +387,8 @@ let rec = null, recChunks = [], recStream = null, recType = '';
 const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder) && !PHONE;
 if (canRec) $('#rec').hidden = false;
 function pickType() {
-  for (const t of ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'])
+  const pref = new URLSearchParams(location.search).get('fmt') === 'webm' ? ['video/webm;codecs=h264,opus', 'video/webm;codecs=avc1,opus'] : [];
+  for (const t of [...pref, 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'])
     if (MediaRecorder.isTypeSupported(t)) return t;
   return '';
 }
@@ -419,7 +423,7 @@ async function startRec() {
     recSrc = cv.captureStream(30); recStream.getAudioTracks().forEach(t => recSrc.addTrack(t));
   } catch (e) { recSrc = recStream; }
   recType = pickType(); recChunks = [];
-  try { rec = new MediaRecorder(recSrc, recType ? {mimeType: recType, videoBitsPerSecond: 8e6} : undefined); } catch (e) { rec = new MediaRecorder(recSrc); recType = rec.mimeType; }
+  try { rec = new MediaRecorder(recSrc, recType ? {mimeType: recType, videoBitsPerSecond: 12e6} : undefined); } catch (e) { rec = new MediaRecorder(recSrc); recType = rec.mimeType; }
   rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
   rec.onstop = saveRec;
   track.addEventListener('ended', () => { if (rec && rec.state !== 'inactive') finishRec(); });
@@ -437,6 +441,7 @@ function finishRec() {
 }
 function saveRec() {
   const r = rec; rec = null;
+  document.body.classList.remove('recplay');
   if (document.body.classList.contains('recording')) { document.body.classList.remove('recording'); makePlayer(true); }
   $('#recBadge').hidden = true; $('#rec').classList.remove('on'); $('#rec').textContent = '● 動画ファイルに保存';
   document.querySelectorAll('#prev,#next,#again,#play,#pre,#post').forEach(b => { b.disabled = false; });
