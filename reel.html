@@ -402,14 +402,18 @@ async function startRec() {
   document.body.classList.add('recording'); window.scrollTo(0, 0);
   stop(); await makePlayer(false);
   // keep only the video area, not the whole page
-  try { if (window.CropTarget && track.cropTo) await track.cropTo(await CropTarget.fromElement($('#playerBox'))); } catch (e) {}
+  let cropped = false;
+  try { if (window.CropTarget && track.cropTo) { await track.cropTo(await CropTarget.fromElement($('#playerBox'))); cropped = true; } } catch (e) {}
   // Chrome keeps the encoder at the first (whole-tab) size and stretches the cropped picture into it,
   // so redraw the shared picture onto a fixed 1920x1080 canvas and record that instead
   let recSrc = recStream;
   try {
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([track]); await v.play();
     const cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080; const cx = cv.getContext('2d');
-    const draw = () => { if (!recStream || recStream.getVideoTracks()[0].readyState === 'ended') return; try { cx.drawImage(v, 0, 0, 1920, 1080); } catch (e) {}
+    const draw = () => { if (!recStream || recStream.getVideoTracks()[0].readyState === 'ended') return; try {
+        if (cropped || !v.videoWidth) cx.drawImage(v, 0, 0, 1920, 1080);
+        else { const r = $('#playerBox').getBoundingClientRect(), k = v.videoWidth / innerWidth; cx.drawImage(v, r.left * k, r.top * k, r.width * k, r.height * k, 0, 0, 1920, 1080); }   // no region capture: cut the video area out of the whole tab
+      } catch (e) {}
       v.requestVideoFrameCallback ? v.requestVideoFrameCallback(draw) : requestAnimationFrame(draw); };
     draw();
     recSrc = cv.captureStream(30); recStream.getAudioTracks().forEach(t => recSrc.addTrack(t));
