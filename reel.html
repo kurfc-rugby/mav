@@ -293,17 +293,17 @@ function go(i, play = true) {
   if (i < 0) i = 0;
   const c = st.clips[i]; st.idx = i; caption(c); markCur(); endT = c.e;
   if (!ready) return;
-  // while recording, start 3.5 s early with the recorder held, so YouTube's buttons and title have faded before the file starts
+  // while recording, start 5 s early with the recorder held (YouTube shows its title and buttons for about 4 s after loading), so YouTube's buttons and title have faded before the file starts
   if (play && rec) { recFrom = c.s; lastGood = c.s; }
   try {
-    if (play) player.loadVideoById({videoId: c.vid, startSeconds: rec ? Math.max(0, c.s - 3.5) : c.s, endSeconds: c.e});
+    if (play) player.loadVideoById({videoId: c.vid, startSeconds: rec ? Math.max(0, c.s - 5) : c.s, endSeconds: c.e});
     else player.cueVideoById({videoId: c.vid, startSeconds: c.s, endSeconds: c.e});
   } catch (e) {}
   if (play) { playing = true; setPlayIcon(); }
   if (play && rec) armKick();
 }
 // the recorder runs only while the scene is playing at or after recFrom; YouTube flashes its buttons whenever playback
-// restarts after buffering, so on a stall we step back 3.5 s and record again from where the file left off
+// restarts after buffering, so on a stall we step back 5 s and record again from where the file left off
 let recFrom = 0, lastGood = 0;
 function recGate() {
   if (!rec || rec.state === 'inactive') return;
@@ -317,7 +317,7 @@ function recStall(state) {
   try { if (rec.state === 'recording') rec.pause(); } catch (e) {}
   if ((state === 3 || state === 2) && playing && lastGood > recFrom + 1 && lastGood < endT - 0.3) {
     recFrom = lastGood;
-    try { player.seekTo(Math.max(0, lastGood - 3.5), true); player.playVideo(); } catch (e) {}
+    try { player.seekTo(Math.max(0, lastGood - 5), true); player.playVideo(); } catch (e) {}
   }
 }
 // while recording, a freshly made player may be refused autoplay with sound: nudge it, then ask for one click on the video
